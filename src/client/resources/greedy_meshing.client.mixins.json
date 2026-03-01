@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.Jean.greedy_meshing.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ClientChunkCacheMixin",
+    "SectionCompilerMixin",
+    "SectionCompilerResultsAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
