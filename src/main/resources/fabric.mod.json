@@ -25,6 +25,10 @@
     {
       "config": "greedy_meshing.client.mixins.json",
       "environment": "client"
+    },
+    {
+      "config": "greedy_meshing.sodium.mixins.json",
+      "environment": "client"
     }
   ],
   "depends": {

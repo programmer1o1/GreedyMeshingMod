@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.color.block.BlockColors;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
@@ -114,18 +115,18 @@ public abstract class SectionCompilerMixin {
         );
         emitVanillaNonGreedySolids(builder, nonGreedySolidBlocks, renderSectionRegion, baseX, baseY, baseZ);
 
-        Map<SpriteKey, TextureAtlasSprite> spriteCache = new HashMap<>();
+        Map<SpriteKey, FaceAppearance> spriteCache = new HashMap<>();
         List<GreedyDebugStore.DebugQuad> debugQuads = captureDebug ? new ArrayList<>(merged.size()) : List.of();
         for (GreedyMesher.GreedyQuad quad : merged) {
-            TextureAtlasSprite sprite = spriteCache.computeIfAbsent(new SpriteKey(quad.state(), quad.face()), key -> {
+            FaceAppearance appearance = spriteCache.computeIfAbsent(new SpriteKey(quad.state(), quad.face()), key -> {
                 BlockStateModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(key.state());
-                return resolveFaceSprite(model, key.face());
+                return resolveFaceAppearance(model, key.face());
             });
-            float u0 = sprite.getU0();
-            float u1 = sprite.getU1();
-            float v0 = sprite.getV0();
-            float v1 = sprite.getV1();
-            emitTiledQuad(builder, quad, u0, u1, v0, v1, renderSectionRegion, baseX, baseY, baseZ);
+            float u0 = appearance.sprite().getU0();
+            float u1 = appearance.sprite().getU1();
+            float v0 = appearance.sprite().getV0();
+            float v1 = appearance.sprite().getV1();
+            emitTiledQuad(builder, quad, u0, u1, v0, v1, appearance.tinted(), renderSectionRegion, baseX, baseY, baseZ);
             if (captureDebug) {
                 debugQuads.add(toDebugQuad(quad, baseX, baseY, baseZ));
             }
@@ -187,14 +188,15 @@ public abstract class SectionCompilerMixin {
         }
     }
 
-    private static TextureAtlasSprite resolveFaceSprite(BlockStateModel model, Direction face) {
+    private static FaceAppearance resolveFaceAppearance(BlockStateModel model, Direction face) {
         RandomSource random = RandomSource.create(0L);
         List<BlockModelPart> parts = model.collectParts(random);
 
         for (BlockModelPart part : parts) {
             List<BakedQuad> quads = part.getQuads(face);
             if (!quads.isEmpty()) {
-                return quads.get(0).sprite();
+                BakedQuad quad = quads.get(0);
+                return new FaceAppearance(quad.sprite(), quad.isTinted());
             }
         }
 
@@ -202,16 +204,16 @@ public abstract class SectionCompilerMixin {
             List<BakedQuad> unculled = part.getQuads(null);
             for (BakedQuad quad : unculled) {
                 if (quad.direction() == face) {
-                    return quad.sprite();
+                    return new FaceAppearance(quad.sprite(), quad.isTinted());
                 }
             }
         }
 
         if (!parts.isEmpty()) {
-            return parts.get(0).particleIcon();
+            return new FaceAppearance(parts.get(0).particleIcon(), false);
         }
 
-        return model.particleIcon();
+        return new FaceAppearance(model.particleIcon(), false);
     }
 
     private static void emitTiledQuad(
@@ -221,6 +223,7 @@ public abstract class SectionCompilerMixin {
             float u1,
             float v0,
             float v1,
+            boolean applyTint,
             RenderSectionRegion region,
             int baseX,
             int baseY,
@@ -230,6 +233,9 @@ public abstract class SectionCompilerMixin {
         int tilesU = Math.max(1, quad.width());
         int tilesV = Math.max(1, quad.height());
         BlockPos.MutableBlockPos lightPos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos tintPos = new BlockPos.MutableBlockPos();
+        float[] c = new float[12];
+        BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
 
         for (int tv = 0; tv < tilesV; tv++) {
             for (int tu = 0; tu < tilesU; tu++) {
@@ -238,16 +244,68 @@ public abstract class SectionCompilerMixin {
                 float fv0 = (float) tv / (float) tilesV;
                 float fv1 = (float) (tv + 1) / (float) tilesV;
 
-                float[] c = new float[]{
-                        interpolate(full, fu0, fv0, 0), interpolate(full, fu0, fv0, 1), interpolate(full, fu0, fv0, 2),
-                        interpolate(full, fu1, fv0, 0), interpolate(full, fu1, fv0, 1), interpolate(full, fu1, fv0, 2),
-                        interpolate(full, fu1, fv1, 0), interpolate(full, fu1, fv1, 1), interpolate(full, fu1, fv1, 2),
-                        interpolate(full, fu0, fv1, 0), interpolate(full, fu0, fv1, 1), interpolate(full, fu0, fv1, 2)
-                };
+                c[0] = interpolate(full, fu0, fv0, 0);
+                c[1] = interpolate(full, fu0, fv0, 1);
+                c[2] = interpolate(full, fu0, fv0, 2);
+                c[3] = interpolate(full, fu1, fv0, 0);
+                c[4] = interpolate(full, fu1, fv0, 1);
+                c[5] = interpolate(full, fu1, fv0, 2);
+                c[6] = interpolate(full, fu1, fv1, 0);
+                c[7] = interpolate(full, fu1, fv1, 1);
+                c[8] = interpolate(full, fu1, fv1, 2);
+                c[9] = interpolate(full, fu0, fv1, 0);
+                c[10] = interpolate(full, fu0, fv1, 1);
+                c[11] = interpolate(full, fu0, fv1, 2);
 
-                emitOneQuad(consumer, c, quad.face(), u0, u1, v0, v1, region, baseX, baseY, baseZ, lightPos);
+                int tint = applyTint ? tintColorForTile(quad, tu, tv, region, baseX, baseY, baseZ, tintPos, blockColors) : 0xFFFFFF;
+                float tintR = ((tint >> 16) & 0xFF) / 255.0f;
+                float tintG = ((tint >> 8) & 0xFF) / 255.0f;
+                float tintB = (tint & 0xFF) / 255.0f;
+
+                emitOneQuad(consumer, c, quad.face(), u0, u1, v0, v1, region, baseX, baseY, baseZ, lightPos, tintR, tintG, tintB);
             }
         }
+    }
+
+    private static int tintColorForTile(
+            GreedyMesher.GreedyQuad quad,
+            int tileU,
+            int tileV,
+            RenderSectionRegion region,
+            int baseX,
+            int baseY,
+            int baseZ,
+            BlockPos.MutableBlockPos samplePos,
+            BlockColors blockColors
+    ) {
+        int localX;
+        int localY;
+        int localZ;
+
+        switch (quad.face()) {
+            case NORTH, SOUTH -> {
+                localX = quad.x() + tileU;
+                localY = quad.y() + tileV;
+                localZ = quad.z();
+            }
+            case WEST, EAST -> {
+                localX = quad.x();
+                localY = quad.y() + tileV;
+                localZ = quad.z() + tileU;
+            }
+            case DOWN, UP -> {
+                localX = quad.x() + tileU;
+                localY = quad.y();
+                localZ = quad.z() + tileV;
+            }
+            default -> {
+                return 0xFFFFFF;
+            }
+        }
+
+        samplePos.set(baseX + localX, baseY + localY, baseZ + localZ);
+        int tint = blockColors.getColor(quad.state(), region, samplePos, 0);
+        return tint == -1 ? 0xFFFFFF : tint;
     }
 
     private static float interpolate(float[] c, float fu, float fv, int axis) {
@@ -273,22 +331,40 @@ public abstract class SectionCompilerMixin {
             int baseX,
             int baseY,
             int baseZ,
-            BlockPos.MutableBlockPos lightPos
+            BlockPos.MutableBlockPos lightPos,
+            float tintR,
+            float tintG,
+            float tintB
     ) {
         float nx = face.getStepX();
         float ny = face.getStepY();
         float nz = face.getStepZ();
         float baseShade = region.getShade(face, true);
         int packedLight = packedLightAtQuadCenter(region, baseX, baseY, baseZ, c, face, lightPos);
-        emitVertex(consumer, c[0], c[1], c[2], u0, v0, nx, ny, nz, packedLight, baseShade);
-        emitVertex(consumer, c[3], c[4], c[5], u1, v0, nx, ny, nz, packedLight, baseShade);
-        emitVertex(consumer, c[6], c[7], c[8], u1, v1, nx, ny, nz, packedLight, baseShade);
-        emitVertex(consumer, c[9], c[10], c[11], u0, v1, nx, ny, nz, packedLight, baseShade);
+        emitVertex(consumer, c[0], c[1], c[2], u0, v0, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
+        emitVertex(consumer, c[3], c[4], c[5], u1, v0, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
+        emitVertex(consumer, c[6], c[7], c[8], u1, v1, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
+        emitVertex(consumer, c[9], c[10], c[11], u0, v1, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
     }
 
-    private static void emitVertex(VertexConsumer consumer, float x, float y, float z, float u, float v, float nx, float ny, float nz, int packedLight, float shade) {
+    private static void emitVertex(
+            VertexConsumer consumer,
+            float x,
+            float y,
+            float z,
+            float u,
+            float v,
+            float nx,
+            float ny,
+            float nz,
+            int packedLight,
+            float shade,
+            float tintR,
+            float tintG,
+            float tintB
+    ) {
         consumer.addVertex(x, y, z)
-                .setColor(shade, shade, shade, 1.0f)
+                .setColor(shade * tintR, shade * tintG, shade * tintB, 1.0f)
                 .setUv(u, v)
                 .setLight(packedLight)
                 .setNormal(nx, ny, nz);
@@ -379,5 +455,8 @@ public abstract class SectionCompilerMixin {
     }
 
     private record NonGreedySolidBlock(int x, int y, int z, BlockState state) {
+    }
+
+    private record FaceAppearance(TextureAtlasSprite sprite, boolean tinted) {
     }
 }
