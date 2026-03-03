@@ -10,15 +10,12 @@ public final class GreedyRuntimeState {
     }
 
     public static boolean isRuntimeGreedyActive() {
-        return GreedyConfig.enabled() && !isSmoothLightingEnabled();
+        return GreedyConfig.enabled();
     }
 
     public static String inactiveReason() {
         if (!GreedyConfig.enabled()) {
             return "Config disabled";
-        }
-        if (isSmoothLightingEnabled()) {
-            return "Smooth Lighting ON (vanilla parity mode)";
         }
         return "Unknown";
     }

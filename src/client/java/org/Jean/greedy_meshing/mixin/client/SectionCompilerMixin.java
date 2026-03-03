@@ -5,17 +5,16 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.color.block.BlockColors;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexSorting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
-import net.minecraft.client.renderer.block.model.BlockStateModel;
-import net.minecraft.client.renderer.block.model.BlockModelPart;
 import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.BlockModelPart;
+import net.minecraft.client.renderer.block.model.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.chunk.SectionCompiler;
@@ -30,6 +29,7 @@ import org.Jean.greedy_meshing.GreedyConfig;
 import org.Jean.greedy_meshing.GreedyEligibility;
 import org.Jean.greedy_meshing.GreedyMesher;
 import org.Jean.greedy_meshing.client.GreedyDebugStore;
+import org.Jean.greedy_meshing.client.GreedyLighting;
 import org.Jean.greedy_meshing.client.GreedyRuntimeState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -54,8 +54,6 @@ public abstract class SectionCompilerMixin {
         GreedyDebugStore.clearSection(sectionPos.asLong());
         boolean captureDebug = GreedyConfig.debugWireframe() || GreedyConfig.debugTrianglesHud();
 
-        // Vanilla smooth-lighting parity mode:
-        // custom greedy output is disabled when AO/smooth lighting is active.
         if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
             return;
         }
@@ -232,8 +230,8 @@ public abstract class SectionCompilerMixin {
         float[] full = corners(quad);
         int tilesU = Math.max(1, quad.width());
         int tilesV = Math.max(1, quad.height());
-        BlockPos.MutableBlockPos lightPos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos tintPos = new BlockPos.MutableBlockPos();
+        GreedyLighting.Scratch lighting = new GreedyLighting.Scratch();
         float[] c = new float[12];
         BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
 
@@ -257,54 +255,48 @@ public abstract class SectionCompilerMixin {
                 c[10] = interpolate(full, fu0, fv1, 1);
                 c[11] = interpolate(full, fu0, fv1, 2);
 
-                int tint = applyTint ? tintColorForTile(quad, tu, tv, region, baseX, baseY, baseZ, tintPos, blockColors) : 0xFFFFFF;
+                int worldX = tileBlockCoord(baseX, c, 0, quad.face().getStepX());
+                int worldY = tileBlockCoord(baseY, c, 1, quad.face().getStepY());
+                int worldZ = tileBlockCoord(baseZ, c, 2, quad.face().getStepZ());
+
+                int tint = applyTint ? tintColorForTile(quad.state(), region, worldX, worldY, worldZ, tintPos, blockColors) : 0xFFFFFF;
                 float tintR = ((tint >> 16) & 0xFF) / 255.0f;
                 float tintG = ((tint >> 8) & 0xFF) / 255.0f;
                 float tintB = (tint & 0xFF) / 255.0f;
 
-                emitOneQuad(consumer, c, quad.face(), u0, u1, v0, v1, region, baseX, baseY, baseZ, lightPos, tintR, tintG, tintB);
+                emitOneQuad(
+                        consumer,
+                        c,
+                        quad.state(),
+                        quad.face(),
+                        u0,
+                        u1,
+                        v0,
+                        v1,
+                        region,
+                        worldX,
+                        worldY,
+                        worldZ,
+                        lighting,
+                        tintR,
+                        tintG,
+                        tintB
+                );
             }
         }
     }
 
     private static int tintColorForTile(
-            GreedyMesher.GreedyQuad quad,
-            int tileU,
-            int tileV,
+            BlockState state,
             RenderSectionRegion region,
-            int baseX,
-            int baseY,
-            int baseZ,
+            int worldX,
+            int worldY,
+            int worldZ,
             BlockPos.MutableBlockPos samplePos,
             BlockColors blockColors
     ) {
-        int localX;
-        int localY;
-        int localZ;
-
-        switch (quad.face()) {
-            case NORTH, SOUTH -> {
-                localX = quad.x() + tileU;
-                localY = quad.y() + tileV;
-                localZ = quad.z();
-            }
-            case WEST, EAST -> {
-                localX = quad.x();
-                localY = quad.y() + tileV;
-                localZ = quad.z() + tileU;
-            }
-            case DOWN, UP -> {
-                localX = quad.x() + tileU;
-                localY = quad.y();
-                localZ = quad.z() + tileV;
-            }
-            default -> {
-                return 0xFFFFFF;
-            }
-        }
-
-        samplePos.set(baseX + localX, baseY + localY, baseZ + localZ);
-        int tint = blockColors.getColor(quad.state(), region, samplePos, 0);
+        samplePos.set(worldX, worldY, worldZ);
+        int tint = blockColors.getColor(state, region, samplePos, 0);
         return tint == -1 ? 0xFFFFFF : tint;
     }
 
@@ -319,19 +311,25 @@ public abstract class SectionCompilerMixin {
                 + c3 * (1.0f - fu) * fv;
     }
 
+    private static int tileBlockCoord(int base, float[] c, int axis, int faceStep) {
+        float center = (c[axis] + c[3 + axis] + c[6 + axis] + c[9 + axis]) * 0.25f;
+        return (int) Math.floor(base + center - 0.5f * faceStep);
+    }
+
     private static void emitOneQuad(
             VertexConsumer consumer,
             float[] c,
+            BlockState state,
             Direction face,
             float u0,
             float u1,
             float v0,
             float v1,
             RenderSectionRegion region,
-            int baseX,
-            int baseY,
-            int baseZ,
-            BlockPos.MutableBlockPos lightPos,
+            int worldX,
+            int worldY,
+            int worldZ,
+            GreedyLighting.Scratch lighting,
             float tintR,
             float tintG,
             float tintB
@@ -339,12 +337,11 @@ public abstract class SectionCompilerMixin {
         float nx = face.getStepX();
         float ny = face.getStepY();
         float nz = face.getStepZ();
-        float baseShade = region.getShade(face, true);
-        int packedLight = packedLightAtQuadCenter(region, baseX, baseY, baseZ, c, face, lightPos);
-        emitVertex(consumer, c[0], c[1], c[2], u0, v0, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
-        emitVertex(consumer, c[3], c[4], c[5], u1, v0, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
-        emitVertex(consumer, c[6], c[7], c[8], u1, v1, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
-        emitVertex(consumer, c[9], c[10], c[11], u0, v1, nx, ny, nz, packedLight, baseShade, tintR, tintG, tintB);
+        GreedyLighting.computeTileLighting(region, state, face, worldX, worldY, worldZ, lighting);
+        emitVertex(consumer, c[0], c[1], c[2], u0, v0, nx, ny, nz, lighting.lightmap[0], lighting.brightness[0], tintR, tintG, tintB);
+        emitVertex(consumer, c[3], c[4], c[5], u1, v0, nx, ny, nz, lighting.lightmap[1], lighting.brightness[1], tintR, tintG, tintB);
+        emitVertex(consumer, c[6], c[7], c[8], u1, v1, nx, ny, nz, lighting.lightmap[2], lighting.brightness[2], tintR, tintG, tintB);
+        emitVertex(consumer, c[9], c[10], c[11], u0, v1, nx, ny, nz, lighting.lightmap[3], lighting.brightness[3], tintR, tintG, tintB);
     }
 
     private static void emitVertex(
@@ -358,49 +355,16 @@ public abstract class SectionCompilerMixin {
             float ny,
             float nz,
             int packedLight,
-            float shade,
+            float brightness,
             float tintR,
             float tintG,
             float tintB
     ) {
         consumer.addVertex(x, y, z)
-                .setColor(shade * tintR, shade * tintG, shade * tintB, 1.0f)
+                .setColor(brightness * tintR, brightness * tintG, brightness * tintB, 1.0f)
                 .setUv(u, v)
                 .setLight(packedLight)
                 .setNormal(nx, ny, nz);
-    }
-
-    private static int packedLightAtVertex(
-            RenderSectionRegion region,
-            int baseX,
-            int baseY,
-            int baseZ,
-            float localX,
-            float localY,
-            float localZ,
-            Direction face,
-            BlockPos.MutableBlockPos samplePos
-    ) {
-        int sampleX = (int) Math.floor(baseX + localX + 0.5f * face.getStepX());
-        int sampleY = (int) Math.floor(baseY + localY + 0.5f * face.getStepY());
-        int sampleZ = (int) Math.floor(baseZ + localZ + 0.5f * face.getStepZ());
-        samplePos.set(sampleX, sampleY, sampleZ);
-        return LevelRenderer.getLightColor(region, samplePos);
-    }
-
-    private static int packedLightAtQuadCenter(
-            RenderSectionRegion region,
-            int baseX,
-            int baseY,
-            int baseZ,
-            float[] c,
-            Direction face,
-            BlockPos.MutableBlockPos samplePos
-    ) {
-        float localX = (c[0] + c[3] + c[6] + c[9]) * 0.25f;
-        float localY = (c[1] + c[4] + c[7] + c[10]) * 0.25f;
-        float localZ = (c[2] + c[5] + c[8] + c[11]) * 0.25f;
-        return packedLightAtVertex(region, baseX, baseY, baseZ, localX, localY, localZ, face, samplePos);
     }
 
     private static float[] corners(GreedyMesher.GreedyQuad quad) {

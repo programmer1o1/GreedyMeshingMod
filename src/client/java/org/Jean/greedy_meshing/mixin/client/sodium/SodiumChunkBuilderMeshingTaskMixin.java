@@ -14,7 +14,6 @@ import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.Transl
 import net.caffeinemc.mods.sodium.client.util.task.CancellationToken;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockModelPart;
 import net.minecraft.client.renderer.block.model.BlockStateModel;
@@ -29,6 +28,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.Jean.greedy_meshing.GreedyEligibility;
 import org.Jean.greedy_meshing.GreedyMesher;
 import org.Jean.greedy_meshing.client.GreedyDebugStore;
+import org.Jean.greedy_meshing.client.GreedyLighting;
 import org.Jean.greedy_meshing.client.GreedyRuntimeState;
 import org.Jean.greedy_meshing.client.sodium.GreedySodiumSpriteKey;
 import org.Jean.greedy_meshing.client.sodium.GreedySodiumWorkState;
@@ -262,8 +262,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         float[] full = corners(quad);
         int tilesU = Math.max(1, quad.width());
         int tilesV = Math.max(1, quad.height());
-        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos tintPos = new BlockPos.MutableBlockPos();
+        GreedyLighting.Scratch lighting = new GreedyLighting.Scratch();
         float[] c = new float[12];
         BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
 
@@ -287,55 +287,49 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                 c[10] = interpolate(full, fu0, fv1, 1);
                 c[11] = interpolate(full, fu0, fv1, 2);
 
-                int tint = applyTint ? tintColorForTile(quad, tu, tv, world, baseX, baseY, baseZ, tintPos, blockColors) : 0xFFFFFF;
+                int worldX = tileBlockCoord(baseX, c, 0, quad.face().getStepX());
+                int worldY = tileBlockCoord(baseY, c, 1, quad.face().getStepY());
+                int worldZ = tileBlockCoord(baseZ, c, 2, quad.face().getStepZ());
+
+                int tint = applyTint ? tintColorForTile(quad.state(), world, worldX, worldY, worldZ, tintPos, blockColors) : 0xFFFFFF;
                 float tintR = ((tint >> 16) & 0xFF) / 255.0f;
                 float tintG = ((tint >> 8) & 0xFF) / 255.0f;
                 float tintB = (tint & 0xFF) / 255.0f;
 
-                emitOneQuad(consumer, c, quad.face(), u0, u1, v0, v1, world, baseX, baseY, baseZ, samplePos, tintR, tintG, tintB);
+                emitOneQuad(
+                        consumer,
+                        c,
+                        quad.state(),
+                        quad.face(),
+                        u0,
+                        u1,
+                        v0,
+                        v1,
+                        world,
+                        worldX,
+                        worldY,
+                        worldZ,
+                        lighting,
+                        tintR,
+                        tintG,
+                        tintB
+                );
             }
         }
     }
 
     @Unique
     private static int tintColorForTile(
-            GreedyMesher.GreedyQuad quad,
-            int tileU,
-            int tileV,
+            BlockState state,
             BlockAndTintGetter world,
-            int baseX,
-            int baseY,
-            int baseZ,
+            int worldX,
+            int worldY,
+            int worldZ,
             BlockPos.MutableBlockPos samplePos,
             BlockColors blockColors
     ) {
-        int localX;
-        int localY;
-        int localZ;
-
-        switch (quad.face()) {
-            case NORTH, SOUTH -> {
-                localX = quad.x() + tileU;
-                localY = quad.y() + tileV;
-                localZ = quad.z();
-            }
-            case WEST, EAST -> {
-                localX = quad.x();
-                localY = quad.y() + tileV;
-                localZ = quad.z() + tileU;
-            }
-            case DOWN, UP -> {
-                localX = quad.x() + tileU;
-                localY = quad.y();
-                localZ = quad.z() + tileV;
-            }
-            default -> {
-                return 0xFFFFFF;
-            }
-        }
-
-        samplePos.set(baseX + localX, baseY + localY, baseZ + localZ);
-        int tint = blockColors.getColor(quad.state(), world, samplePos, 0);
+        samplePos.set(worldX, worldY, worldZ);
+        int tint = blockColors.getColor(state, world, samplePos, 0);
         return tint == -1 ? 0xFFFFFF : tint;
     }
 
@@ -343,16 +337,17 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
     private static void emitOneQuad(
             VertexConsumer consumer,
             float[] c,
+            BlockState state,
             Direction face,
             float u0,
             float u1,
             float v0,
             float v1,
             BlockAndTintGetter world,
-            int baseX,
-            int baseY,
-            int baseZ,
-            BlockPos.MutableBlockPos samplePos,
+            int worldX,
+            int worldY,
+            int worldZ,
+            GreedyLighting.Scratch lighting,
             float tintR,
             float tintG,
             float tintB
@@ -360,18 +355,17 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         float nx = face.getStepX();
         float ny = face.getStepY();
         float nz = face.getStepZ();
-        float shade = world.getShade(face, true);
-        int packedLight = packedLightAtQuadCenter(world, baseX, baseY, baseZ, c, face, samplePos);
+        GreedyLighting.computeTileLighting(world, state, face, worldX, worldY, worldZ, lighting);
 
         // Side faces use the opposite V direction to keep textures upright (e.g. grass side overlay).
         boolean flipV = face.getAxis().isHorizontal();
         float vv0 = flipV ? v1 : v0;
         float vv1 = flipV ? v0 : v1;
 
-        emitVertex(consumer, c[0], c[1], c[2], u0, vv0, nx, ny, nz, packedLight, shade, tintR, tintG, tintB);
-        emitVertex(consumer, c[3], c[4], c[5], u1, vv0, nx, ny, nz, packedLight, shade, tintR, tintG, tintB);
-        emitVertex(consumer, c[6], c[7], c[8], u1, vv1, nx, ny, nz, packedLight, shade, tintR, tintG, tintB);
-        emitVertex(consumer, c[9], c[10], c[11], u0, vv1, nx, ny, nz, packedLight, shade, tintR, tintG, tintB);
+        emitVertex(consumer, c[0], c[1], c[2], u0, vv0, nx, ny, nz, lighting.lightmap[0], lighting.brightness[0], tintR, tintG, tintB);
+        emitVertex(consumer, c[3], c[4], c[5], u1, vv0, nx, ny, nz, lighting.lightmap[1], lighting.brightness[1], tintR, tintG, tintB);
+        emitVertex(consumer, c[6], c[7], c[8], u1, vv1, nx, ny, nz, lighting.lightmap[2], lighting.brightness[2], tintR, tintG, tintB);
+        emitVertex(consumer, c[9], c[10], c[11], u0, vv1, nx, ny, nz, lighting.lightmap[3], lighting.brightness[3], tintR, tintG, tintB);
     }
 
     @Unique
@@ -386,36 +380,16 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             float ny,
             float nz,
             int packedLight,
-            float shade,
+            float brightness,
             float tintR,
             float tintG,
             float tintB
     ) {
         consumer.addVertex(x, y, z)
-                .setColor(shade * tintR, shade * tintG, shade * tintB, 1.0f)
+                .setColor(brightness * tintR, brightness * tintG, brightness * tintB, 1.0f)
                 .setUv(u, v)
                 .setLight(packedLight)
                 .setNormal(nx, ny, nz);
-    }
-
-    @Unique
-    private static int packedLightAtQuadCenter(
-            BlockAndTintGetter world,
-            int baseX,
-            int baseY,
-            int baseZ,
-            float[] c,
-            Direction face,
-            BlockPos.MutableBlockPos samplePos
-    ) {
-        float localX = (c[0] + c[3] + c[6] + c[9]) * 0.25f;
-        float localY = (c[1] + c[4] + c[7] + c[10]) * 0.25f;
-        float localZ = (c[2] + c[5] + c[8] + c[11]) * 0.25f;
-        int sampleX = (int) Math.floor(baseX + localX + 0.5f * face.getStepX());
-        int sampleY = (int) Math.floor(baseY + localY + 0.5f * face.getStepY());
-        int sampleZ = (int) Math.floor(baseZ + localZ + 0.5f * face.getStepZ());
-        samplePos.set(sampleX, sampleY, sampleZ);
-        return LevelRenderer.getLightColor(world, samplePos);
     }
 
     @Unique
@@ -428,6 +402,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                 + c1 * fu * (1.0f - fv)
                 + c2 * fu * fv
                 + c3 * (1.0f - fu) * fv;
+    }
+
+    @Unique
+    private static int tileBlockCoord(int base, float[] c, int axis, int faceStep) {
+        float center = (c[axis] + c[3 + axis] + c[6 + axis] + c[9 + axis]) * 0.25f;
+        return (int) Math.floor(base + center - 0.5f * faceStep);
     }
 
     @Unique
