@@ -25,10 +25,12 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import org.Jean.greedy_meshing.GreedyConfig;
 import org.Jean.greedy_meshing.GreedyEligibility;
 import org.Jean.greedy_meshing.GreedyMesher;
 import org.Jean.greedy_meshing.client.GreedyDebugStore;
 import org.Jean.greedy_meshing.client.GreedyLighting;
+import org.Jean.greedy_meshing.client.GreedyPerformanceStats;
 import org.Jean.greedy_meshing.client.GreedyRuntimeState;
 import org.Jean.greedy_meshing.client.sodium.GreedySodiumSpriteKey;
 import org.Jean.greedy_meshing.client.sodium.GreedySodiumWorkState;
@@ -40,14 +42,21 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Mixin(ChunkBuilderMeshingTask.class)
 public abstract class SodiumChunkBuilderMeshingTaskMixin {
     @Unique
     private static final ThreadLocal<GreedySodiumWorkState> GREEDY_MESHING$STATE = ThreadLocal.withInitial(GreedySodiumWorkState::new);
+    @Unique
+    private static final Map<GreedySodiumSpriteKey, FaceAppearance> GREEDY_MESHING$FACE_CACHE = new ConcurrentHashMap<>();
+    @Unique
+    private static final Direction[] GREEDY_MESHING$FACES = Direction.values();
+    @Unique
+    private static final ThreadLocal<BitSet[]> GREEDY_MESHING$VISIBLE = ThreadLocal.withInitial(GreedyMesher::createFaceMaskArray);
 
     @Inject(method = "execute", at = @At("HEAD"))
     private void greedyMeshing$beginSodiumTask(
@@ -62,6 +71,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         work.sectionKey(SectionPos.asLong(render.getChunkX(), render.getChunkY(), render.getChunkZ()));
         GreedyDebugStore.clearSection(work.sectionKey());
         work.world(getWorldSlice(buildContext));
+        GreedyMesher.clearFaceMaskArray(GREEDY_MESHING$VISIBLE.get());
+        GreedyPerformanceStats.onSodiumTaskHook();
     }
 
     @Inject(method = "execute", at = @At("RETURN"))
@@ -161,37 +172,52 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         int baseX = work.sectionOrigin().getX();
         int baseY = work.sectionOrigin().getY();
         int baseZ = work.sectionOrigin().getZ();
-        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
+        BitSet[] visibleFaces = GREEDY_MESHING$VISIBLE.get();
+        populateFaceVisibility(work.world(), work.sectionStates(), visibleFaces, baseX, baseY, baseZ);
+        List<GreedyMesher.GreedyQuad> merged = GreedyMesher.mesh(work.sectionStates(), visibleFaces);
 
-        List<GreedyMesher.GreedyQuad> merged = GreedyMesher.mesh(work.sectionStates(), (x, y, z, face, state) -> {
-            samplePos.set(baseX + x + face.getStepX(), baseY + y + face.getStepY(), baseZ + z + face.getStepZ());
-            BlockState neighbor = work.world().getBlockState(samplePos);
-            return Block.shouldRenderFace(state, neighbor, face);
-        });
-
-        Map<GreedySodiumSpriteKey, FaceAppearance> spriteCache = new HashMap<>();
         List<GreedyDebugStore.DebugQuad> debugQuads = work.captureDebug() ? new ArrayList<>(merged.size()) : List.of();
+        boolean mergedQuadsMode = GreedyConfig.experimentalMergedQuads();
+        int emittedQuads = 0;
         for (GreedyMesher.GreedyQuad quad : merged) {
-            FaceAppearance appearance = spriteCache.computeIfAbsent(new GreedySodiumSpriteKey(quad.state(), quad.face()), key -> {
-                BlockStateModel quadModel = Minecraft.getInstance().getBlockRenderer().getBlockModel(key.state());
-                return resolveFaceAppearance(quadModel, key.face());
-            });
-            emitTiledQuad(
-                    consumer,
-                    quad,
-                    appearance.sprite().getU0(),
-                    appearance.sprite().getU1(),
-                    appearance.sprite().getV0(),
-                    appearance.sprite().getV1(),
-                    appearance.tinted(),
-                    work.world(),
-                    baseX,
-                    baseY,
-                    baseZ
-            );
+            FaceAppearance appearance = greedyMeshing$cachedFaceAppearance(new GreedySodiumSpriteKey(quad.state(), quad.face()));
+            if (mergedQuadsMode) {
+                emitMergedQuad(
+                        consumer,
+                        quad,
+                        appearance.sprite().getU0(),
+                        appearance.sprite().getU1(),
+                        appearance.sprite().getV0(),
+                        appearance.sprite().getV1(),
+                        appearance.tinted(),
+                        work.world(),
+                        baseX,
+                        baseY,
+                        baseZ
+                );
+                emittedQuads++;
+            } else {
+                emitTiledQuad(
+                        consumer,
+                        quad,
+                        appearance.sprite().getU0(),
+                        appearance.sprite().getU1(),
+                        appearance.sprite().getV0(),
+                        appearance.sprite().getV1(),
+                        appearance.tinted(),
+                        work.world(),
+                        baseX,
+                        baseY,
+                        baseZ
+                );
+                emittedQuads += quad.width() * quad.height();
+            }
             if (work.captureDebug()) {
                 debugQuads.add(toDebugQuad(quad, baseX, baseY, baseZ));
             }
+        }
+        if (!merged.isEmpty()) {
+            GreedyPerformanceStats.onGreedySectionBuilt(work.eligibleCount(), merged.size(), emittedQuads);
         }
 
         if (work.captureDebug()) {
@@ -243,6 +269,59 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         }
 
         return new FaceAppearance(model.particleIcon(), false);
+    }
+
+    @Unique
+    private static FaceAppearance greedyMeshing$cachedFaceAppearance(GreedySodiumSpriteKey key) {
+        return GREEDY_MESHING$FACE_CACHE.computeIfAbsent(key, k -> {
+            BlockStateModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(k.state());
+            return resolveFaceAppearance(model, k.face());
+        });
+    }
+
+    @Unique
+    private static void populateFaceVisibility(
+            BlockAndTintGetter world,
+            BlockState[] sectionStates,
+            BitSet[] visibleFaces,
+            int baseX,
+            int baseY,
+            int baseZ
+    ) {
+        GreedyMesher.clearFaceMaskArray(visibleFaces);
+        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
+        for (int y = 0; y < GreedyMesher.SECTION_SIZE; y++) {
+            for (int z = 0; z < GreedyMesher.SECTION_SIZE; z++) {
+                for (int x = 0; x < GreedyMesher.SECTION_SIZE; x++) {
+                    int idx = GreedyMesher.index(x, y, z);
+                    BlockState state = sectionStates[idx];
+                    if (state == null) {
+                        continue;
+                    }
+
+                    int worldX = baseX + x;
+                    int worldY = baseY + y;
+                    int worldZ = baseZ + z;
+                    for (Direction face : GREEDY_MESHING$FACES) {
+                        int nx = x + face.getStepX();
+                        int ny = y + face.getStepY();
+                        int nz = z + face.getStepZ();
+                        if (nx >= 0 && nx < GreedyMesher.SECTION_SIZE
+                                && ny >= 0 && ny < GreedyMesher.SECTION_SIZE
+                                && nz >= 0 && nz < GreedyMesher.SECTION_SIZE
+                                && sectionStates[GreedyMesher.index(nx, ny, nz)] != null) {
+                            continue;
+                        }
+
+                        samplePos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
+                        BlockState neighbor = world.getBlockState(samplePos);
+                        if (Block.shouldRenderFace(state, neighbor, face)) {
+                            visibleFaces[face.ordinal()].set(idx);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Unique
@@ -316,6 +395,53 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                 );
             }
         }
+    }
+
+    @Unique
+    private static void emitMergedQuad(
+            VertexConsumer consumer,
+            GreedyMesher.GreedyQuad quad,
+            float u0,
+            float u1,
+            float v0,
+            float v1,
+            boolean applyTint,
+            BlockAndTintGetter world,
+            int baseX,
+            int baseY,
+            int baseZ
+    ) {
+        float[] full = corners(quad);
+        GreedyLighting.Scratch lighting = new GreedyLighting.Scratch();
+        BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
+        BlockPos.MutableBlockPos tintPos = new BlockPos.MutableBlockPos();
+
+        int worldX = tileBlockCoord(baseX, full, 0, quad.face().getStepX());
+        int worldY = tileBlockCoord(baseY, full, 1, quad.face().getStepY());
+        int worldZ = tileBlockCoord(baseZ, full, 2, quad.face().getStepZ());
+        int tint = applyTint ? tintColorForTile(quad.state(), world, worldX, worldY, worldZ, tintPos, blockColors) : 0xFFFFFF;
+        float tintR = ((tint >> 16) & 0xFF) / 255.0f;
+        float tintG = ((tint >> 8) & 0xFF) / 255.0f;
+        float tintB = (tint & 0xFF) / 255.0f;
+
+        emitOneQuad(
+                consumer,
+                full,
+                quad.state(),
+                quad.face(),
+                u0,
+                u1,
+                v0,
+                v1,
+                world,
+                worldX,
+                worldY,
+                worldZ,
+                lighting,
+                tintR,
+                tintG,
+                tintB
+        );
     }
 
     @Unique

@@ -57,6 +57,10 @@ public final class GreedyConfig {
         return data.debugTrianglesHud;
     }
 
+    public static boolean experimentalMergedQuads() {
+        return data.experimentalMergedQuads;
+    }
+
     public static float meshOpacity() {
         return data.meshOpacity;
     }
@@ -66,6 +70,7 @@ public final class GreedyConfig {
         copy.enabled = data.enabled;
         copy.debugWireframe = data.debugWireframe;
         copy.debugTrianglesHud = data.debugTrianglesHud;
+        copy.experimentalMergedQuads = data.experimentalMergedQuads;
         copy.meshOpacity = data.meshOpacity;
         return copy;
     }
@@ -80,6 +85,7 @@ public final class GreedyConfig {
         public boolean enabled = true;
         public boolean debugWireframe = false;
         public boolean debugTrianglesHud = false;
+        public boolean experimentalMergedQuads = false;
         public float meshOpacity = 0.35f;
 
         public void clamp() {

@@ -43,6 +43,12 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.debugTrianglesHud = v)
                 .build());
 
+        general.addEntry(entries.startBooleanToggle(Component.literal("Experimental Merged Quads"), draft.experimentalMergedQuads)
+                .setDefaultValue(false)
+                .setTooltip(Component.literal("One quad per merged face (faster geometry, may stretch textures)."))
+                .setSaveConsumer(v -> draft.experimentalMergedQuads = v)
+                .build());
+
         general.addEntry(entries.startFloatField(Component.literal("Mesh Opacity"), draft.meshOpacity)
                 .setDefaultValue(0.35f)
                 .setMin(0.0f)
