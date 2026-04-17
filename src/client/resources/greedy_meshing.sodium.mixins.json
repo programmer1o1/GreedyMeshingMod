@@ -1,16 +1,17 @@
 {
   "required": false,
   "minVersion": "0.8",
-  "package": "org.Jean.greedy_meshing.mixin.client.sodium",
+  "package": "hi.sierra.greedy_meshing.mixin.client.sodium",
   "compatibilityLevel": "JAVA_21",
   "client": [
     "SodiumChunkBuilderMeshingTaskMixin",
     "SodiumChunkBuilderTaskAccessor",
     "SodiumChunkBuildContextAccessor",
-    "SodiumBlockRendererAccessor"
+    "SodiumBlockRendererAccessor",
+    "SodiumShaderLoaderMixin"
   ],
   "injectors": {
-    "defaultRequire": 1
+    "defaultRequire": 0
   },
   "overwrites": {
     "requireAnnotations": true

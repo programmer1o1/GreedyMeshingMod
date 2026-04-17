@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "greedy_meshing",
+  "version": "${version}",
+  "name": "Greedy Meshing",
+  "description": "Chunk rendering optimization via greedy meshing for opaque full cubes.",
+  "authors": ["Sierra"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/greedy_meshing/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "hi.sierra.greedy_meshing.client.GreedyMeshingClient"
+    ],
+    "main": [
+      "hi.sierra.greedy_meshing.GreedyMeshing"
+    ],
+    "modmenu": [
+      "hi.sierra.greedy_meshing.client.GreedyModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "greedy_meshing.client.mixins.json",
+      "environment": "client"
+    },
+    {
+      "config": "greedy_meshing.sodium.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "cloth-config": "*"
+  }
+}

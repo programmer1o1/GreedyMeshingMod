@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build all versions
+        run: ./gradlew build
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Collect JARs
+        id: collect
+        run: |
+          mkdir -p release-jars
+          for dir in versions/*/build/libs; do
+            ver=$(echo "$dir" | cut -d/ -f2)
+            for jar in "$dir"/*.jar; do
+              [ -f "$jar" ] || continue
+              # Skip sources jars
+              case "$jar" in *-sources.jar) continue;; esac
+              cp "$jar" "release-jars/greedy-meshing-${{ steps.version.outputs.VERSION }}+${ver}.jar"
+            done
+          done
+          ls -la release-jars/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-jars/*.jar
+          generate_release_notes: true
+
+      - name: Publish to Modrinth
+        if: env.MODRINTH_TOKEN != ''
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          declare -A MC_VERSIONS=(
+            ["1.21"]="1.21"
+            ["1.21.1"]="1.21.1"
+            ["1.21.2"]="1.21.2"
+            ["1.21.3"]="1.21.3"
+            ["1.21.4"]="1.21.4"
+            ["1.21.5"]="1.21.5"
+            ["1.21.6"]="1.21.6"
+            ["1.21.7"]="1.21.7"
+            ["1.21.8"]="1.21.8"
+            ["1.21.9"]="1.21.9"
+            ["1.21.10"]="1.21.10"
+            ["1.21.11"]="1.21.11"
+            ["26.1"]="26.1"
+            ["26.1.1"]="26.1.1"
+            ["26.1.2"]="26.1.2"
+          )
+
+          for ver in "${!MC_VERSIONS[@]}"; do
+            mc_ver="${MC_VERSIONS[$ver]}"
+            jar_file="release-jars/greedy-meshing-${VERSION}+${ver}.jar"
+
+            if [ ! -f "$jar_file" ]; then
+              echo "Skipping $ver - no jar found"
+              continue
+            fi
+
+            echo "Publishing $ver ($mc_ver)..."
+
+            # Upload file first
+            file_hash=$(sha512sum "$jar_file" | cut -d' ' -f1)
+
+            curl -s -X POST "https://api.modrinth.com/v2/version" \
+              -H "Authorization: $MODRINTH_TOKEN" \
+              -F "data={
+                \"name\": \"Greedy Meshing ${VERSION} for ${mc_ver}\",
+                \"version_number\": \"${VERSION}+${mc_ver}\",
+                \"game_versions\": [\"${mc_ver}\"],
+                \"version_type\": \"release\",
+                \"loaders\": [\"fabric\"],
+                \"featured\": true,
+                \"project_id\": \"greedy-meshing-mod\",
+                \"file_parts\": [\"file\"],
+                \"dependencies\": [
+                  {\"project_id\": \"P7dR8mSH\", \"dependency_type\": \"required\"},
+                  {\"project_id\": \"9s6osm5g\", \"dependency_type\": \"optional\"},
+                  {\"project_id\": \"mOgUt4GM\", \"dependency_type\": \"optional\"}
+                ]
+              }" \
+              -F "file=@${jar_file}" \
+              && echo " -> OK" || echo " -> FAILED"
+          done

@@ -1,7 +1,24 @@
-plugins {
-    id 'fabric-loom' version '1.15-SNAPSHOT'
-    id 'maven-publish'
+buildscript {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath "net.fabricmc:fabric-loom:${loom_version}"
+    }
 }
+
+def isUnobfuscated = findProperty('deps.unobfuscated') == 'true'
+def useMojmap = findProperty('deps.use_mojmap') == 'true'
+def targetJavaVersion = Integer.parseInt(findProperty('deps.java_version') ?: '21')
+
+// 26.1 uses net.fabricmc.fabric-loom (no remapping), older uses fabric-loom
+if (isUnobfuscated) {
+    apply plugin: 'net.fabricmc.fabric-loom'
+} else {
+    apply plugin: 'fabric-loom'
+}
+apply plugin: 'maven-publish'
 
 version = project.mod_version
 group = project.maven_group
@@ -21,26 +38,121 @@ loom {
     }
 }
 
-
 repositories {
     maven { url = "https://maven.shedaniel.me/" }
     maven { url = "https://maven.terraformersmc.com/" }
+    maven { url = "https://maven.caffeinemc.net/releases" }
+    maven { url = "https://api.modrinth.com/maven" }
 }
 
 dependencies {
-    // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modApi "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
-    modApi "com.terraformersmc:modmenu:${project.modmenu_version}"
-
-    def sodiumDevJar = file('run/mods/sodium-fabric-0.8.6+mc1.21.11.jar')
-    if (sodiumDevJar.exists()) {
-        modCompileOnly files(sodiumDevJar)
+    // Mappings: Mojmap for 1.21.11, Yarn for older, none for 26.1
+    if (isUnobfuscated) {
+        // 26.1+: unobfuscated, no mappings needed
+    } else if (useMojmap) {
+        mappings loom.officialMojangMappings()
+    } else {
+        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     }
+
+    if (isUnobfuscated) {
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+        api "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+        api "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+        def sodiumVersion = findProperty('deps.sodium')
+        def sodiumMaven = findProperty('deps.sodium_maven') ?: 'caffeinemc'
+        if (sodiumVersion) {
+            if (sodiumMaven == 'modrinth') {
+                compileOnly "maven.modrinth:sodium:${sodiumVersion}"
+                runtimeOnly "maven.modrinth:sodium:${sodiumVersion}"
+            } else {
+                compileOnly "net.caffeinemc:sodium-fabric:${sodiumVersion}"
+                runtimeOnly "net.caffeinemc:sodium-fabric:${sodiumVersion}"
+            }
+        }
+    } else {
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+        modApi "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
+        modApi "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+        def sodiumVersion = findProperty('deps.sodium')
+        def sodiumMaven = findProperty('deps.sodium_maven') ?: 'caffeinemc'
+        if (sodiumVersion) {
+            if (sodiumMaven == 'modrinth') {
+                modCompileOnly "maven.modrinth:sodium:${sodiumVersion}"
+                modRuntimeOnly "maven.modrinth:sodium:${sodiumVersion}"
+            } else {
+                modCompileOnly "net.caffeinemc:sodium-fabric:${sodiumVersion}"
+                modRuntimeOnly "net.caffeinemc:sodium-fabric:${sodiumVersion}"
+            }
+        }
+
+        def irisVersion = findProperty('deps.iris')
+        if (irisVersion) {
+            modLocalRuntime("maven.modrinth:iris:${irisVersion}") {
+                transitive = false
+            }
+            // Iris runtime dependencies not bundled in Modrinth maven
+            localRuntime "org.anarres:jcpp:1.4.14"
+            localRuntime "io.github.douira:glsl-transformer:2.0.1"
+        }
+
+        def groundedVersion = findProperty('deps.grounded')
+        if (groundedVersion) {
+            modLocalRuntime "maven.modrinth:grounded:${groundedVersion}"
+        }
+
+        def moonlightVersion = findProperty('deps.moonlight')
+        if (moonlightVersion) {
+            modLocalRuntime "maven.modrinth:moonlight:${moonlightVersion}"
+        }
+    }
+}
+
+// Stonecutter preprocessor: use generated sources if available (Groovy DSL needs manual wiring)
+afterEvaluate {
+    def genDir = file("${project.layout.buildDirectory.get().asFile}/generated/stonecutter")
+    def genMain = file("${genDir}/main/java")
+    def genClient = file("${genDir}/client/java")
+    if (genMain.exists()) {
+        sourceSets.main.java.srcDirs = [genMain]
+    }
+    if (genClient.exists()) {
+        sourceSets.client.java.srcDirs = [genClient]
+    }
+    def scMain = tasks.findByName('stonecutterGenerate')
+    def scClient = tasks.findByName('stonecutterGenerateClient')
+    if (scMain) {
+        tasks.named('compileJava') { dependsOn scMain }
+    }
+    if (scClient) {
+        tasks.named('compileClientJava') { dependsOn scClient }
+    }
+    if (scMain && scClient) {
+        tasks.named('compileClientJava') { dependsOn scMain }
+    }
+    def sourcesJarTask = tasks.findByName('sourcesJar')
+    if (sourcesJarTask && scMain) {
+        sourcesJarTask.dependsOn scMain
+    }
+    if (sourcesJarTask && scClient) {
+        sourcesJarTask.dependsOn scClient
+    }
+}
+
+// Version-specific resource overlay: files in versions/<ver>/src/ override main src/
+def versionDir = file("versions/${project.minecraft_version}/src")
+if (versionDir.exists()) {
+    // Insert version-specific resources BEFORE main resources so they win with EXCLUDE strategy
+    def mainResDirs = sourceSets.main.resources.srcDirs.collect()
+    sourceSets.main.resources.srcDirs = ["${versionDir}/main/resources"] + mainResDirs
+    def clientResDirs = sourceSets.client.resources.srcDirs.collect()
+    sourceSets.client.resources.srcDirs = ["${versionDir}/client/resources"] + clientResDirs
 }
 
 processResources {
@@ -49,19 +161,59 @@ processResources {
     inputs.property "loader_version", project.loader_version
     filteringCharset "UTF-8"
 
+    // Version-specific resources may override default ones
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     filesMatching("fabric.mod.json") {
         expand "version": project.version,
                 "minecraft_version": project.minecraft_version,
                 "loader_version": project.loader_version
     }
+
 }
 
-def targetJavaVersion = 21
+// 1.21.9-1.21.10: WorldRenderEvents removed from Fabric API (re-added in 1.21.11)
+def mcVer = findProperty('minecraft_version') ?: ''
+if (mcVer == '1.21.9' || mcVer == '1.21.10') {
+    sourceSets.client.java {
+        exclude '**/GreedyWireframeRenderer.java'
+    }
+}
+
+def hasSodium = findProperty('deps.sodium')?.trim()
+if (!hasSodium) {
+    tasks.named('processClientResources') {
+        exclude 'greedy_meshing.sodium.mixins.json'
+    }
+    sourceSets.client.java {
+        exclude '**/sodium/**'
+    }
+}
+
+// Versions before 1.21.4 use rendertype_solid shaders, not terrain shaders
+def mcVersion = findProperty('minecraft_version') ?: ''
+def mcVersionParts = mcVersion.tokenize('.')
+def useTerrainShaders = true
+if (mcVersionParts.size() >= 2 && mcVersionParts[0] == '1') {
+    def minor = mcVersionParts[1] as int
+    def patch = mcVersionParts.size() >= 3 ? mcVersionParts[2] as int : 0
+    // 1.21.0 through 1.21.3 use rendertype_solid, 1.21.4+ uses terrain
+    if (minor < 21 || (minor == 21 && patch < 4)) {
+        useTerrainShaders = false
+    }
+}
+if (!useTerrainShaders) {
+    tasks.named('processClientResources') {
+        exclude 'assets/minecraft/shaders/core/terrain.vsh'
+        exclude 'assets/minecraft/shaders/core/terrain.fsh'
+    }
+}
+
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.withType(JavaCompile).configureEach {
-    // ensure that the encoding is set to UTF-8, no matter what the system default is
-    // this fixes some edge cases with special characters not displaying correctly
-    // see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-    // If Javadoc is generated, this must be specified in that task too.
     it.options.encoding = "UTF-8"
     if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
         it.options.release.set(targetJavaVersion)
@@ -73,9 +225,6 @@ java {
     if (JavaVersion.current() < javaVersion) {
         toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     }
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
     withSourcesJar()
 }
 
@@ -85,7 +234,6 @@ jar {
     }
 }
 
-// configure the maven publication
 publishing {
     publications {
         create("mavenJava", MavenPublication) {
@@ -93,12 +241,6 @@ publishing {
             from components.java
         }
     }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
     }
 }
