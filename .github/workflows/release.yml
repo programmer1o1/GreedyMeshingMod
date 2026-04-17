@@ -102,7 +102,7 @@ jobs:
                 \"version_type\": \"release\",
                 \"loaders\": [\"fabric\"],
                 \"featured\": true,
-                \"project_id\": \"greedy-meshing-mod\",
+                \"project_id\": \"yOnoFrVo\",
                 \"file_parts\": [\"file\"],
                 \"dependencies\": [
                   {\"project_id\": \"P7dR8mSH\", \"dependency_type\": \"required\"},
