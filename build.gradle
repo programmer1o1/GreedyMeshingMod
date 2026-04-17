@@ -114,17 +114,14 @@ dependencies {
     }
 }
 
-// Stonecutter preprocessor: use generated sources if available (Groovy DSL needs manual wiring)
+// Stonecutter preprocessor: always use generated sources (Groovy DSL needs manual wiring)
 afterEvaluate {
     def genDir = file("${project.layout.buildDirectory.get().asFile}/generated/stonecutter")
     def genMain = file("${genDir}/main/java")
     def genClient = file("${genDir}/client/java")
-    if (genMain.exists()) {
-        sourceSets.main.java.srcDirs = [genMain]
-    }
-    if (genClient.exists()) {
-        sourceSets.client.java.srcDirs = [genClient]
-    }
+    // Always point to generated sources — task dependencies ensure they exist before compilation
+    sourceSets.main.java.srcDirs = [genMain]
+    sourceSets.client.java.srcDirs = [genClient]
     def scMain = tasks.findByName('stonecutterGenerate')
     def scClient = tasks.findByName('stonecutterGenerateClient')
     if (scMain) {
