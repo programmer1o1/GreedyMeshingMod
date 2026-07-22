@@ -69,6 +69,10 @@ public final class GreedyConfig {
         return data.debugTrianglesHud;
     }
 
+    public static boolean debugScreenOverlay() {
+        return data.debugScreenOverlay;
+    }
+
     public static float meshOpacity() {
         return data.meshOpacity;
     }
@@ -81,6 +85,7 @@ public final class GreedyConfig {
         copy.debugWireframe = data.debugWireframe;
         copy.debugComparison = data.debugComparison;
         copy.debugTrianglesHud = data.debugTrianglesHud;
+        copy.debugScreenOverlay = data.debugScreenOverlay;
         copy.meshOpacity = data.meshOpacity;
         return copy;
     }
@@ -106,6 +111,7 @@ public final class GreedyConfig {
         public boolean debugWireframe = false;
         public boolean debugComparison = false;
         public boolean debugTrianglesHud = false;
+        public boolean debugScreenOverlay = true;
         public float meshOpacity = 0.35f;
         public void clamp() {
             if (meshOpacity < 0.0f) {
