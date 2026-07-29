@@ -5,6 +5,45 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0]
+
+### Added
+- **Sodium options integration** for Greedy Meshing settings, including support for
+  running without Cloth Config / Mod Menu installed.
+- **Debug options on Sodium's options page** for easier runtime diagnosis and
+  comparison workflows.
+
+### Fixed
+- **Rotated full-cube model correctness** (issue #6): orientation-bearing block
+  states (`facing`, `axis`, `rotation`) are excluded from greedy capture so their
+  baked-model geometry stays on the normal renderer path.
+- **Weird visual artifacts / average-color-style faces** (issue #5): greedy capture
+  now skips blocks whose face sprites are not compatible with the greedy UV
+  reconstruction path, keeping those blocks on vanilla/Sodium/Vulkan normal render
+  paths.
+- **Sodium 0.8+ options wiring regressions** where some boolean options lacked
+  required default values.
+- **Sodium 0.8+ startup/ClassNotFound crash path** by providing the expected mixin
+  target class presence in newer API layouts.
+
+### Changed
+- **Greedy Water on 26.x** is now disabled in the runtime path to avoid known
+  renderer-specific artifacts on that line.
+
+## [0.3.0]
+
+### Added
+- **Greedy Water (flat still-water merging)** for supported renderer/version paths.
+- **Sable compatibility** adjustments for sub-level shading behavior.
+- **Dev renderer switch** (`-Prenderer=sodium|vulkanmod|vanilla`) to simplify
+  runtime-path testing without editing project properties.
+
+### Fixed
+- **Modrinth listing/version metadata** so Minecraft 26.2 is featured correctly
+  instead of appearing as all-version coverage.
+- **Build dependency resolution** by updating the TerraformersMC repository URL to
+  the current releases endpoint (needed for newer Mod Menu artifacts).
+
 ## [0.2.0]
 
 ### Added
