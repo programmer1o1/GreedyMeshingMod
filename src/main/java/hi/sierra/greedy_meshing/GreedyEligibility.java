@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.block.state.properties.Property;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +40,18 @@ public final class GreedyEligibility {
             Blocks.CRIMSON_NYLIUM,
             Blocks.WARPED_NYLIUM
     );
+
+    /**
+     * The greedy emitter reproduces a block as six axis-aligned, unit-square faces. A full
+     * collision shape is not enough to establish that this is faithful: pistons, observers, and
+     * many modded blocks are full cubes while their baked model changes with orientation. Those
+     * models must remain on the renderer's normal path (issues #5 and #6).
+     *
+     * <p>Use property names rather than the individual {@code BlockStateProperties} constants so
+     * this common source keeps compiling across the supported Minecraft mappings. These names are
+     * the standard directional model properties used by vanilla and Fabric/NeoForge content.</p>
+     */
+    private static final Set<String> ORIENTATION_PROPERTIES = Set.of("facing", "axis", "rotation");
 
     private GreedyEligibility() {
     }
@@ -89,9 +102,19 @@ public final class GreedyEligibility {
                 /*&& state.isSolidRender(level, pos)
                 *///?}
                 && state.isCollisionShapeFullBlock(level, pos)
+                && !hasOrientationProperty(state)
                 && !(FANCY_GRASS_MOD_PRESENT && FANCY_GRASS_BLOCKS.contains(state.getBlock()));
         CACHE.put(state, result);
         return result;
+    }
+
+    private static boolean hasOrientationProperty(BlockState state) {
+        for (Property<?> property : state.getProperties()) {
+            if (ORIENTATION_PROPERTIES.contains(property.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -59,6 +59,7 @@ import hi.sierra.greedy_meshing.client.GreedyDebugStore;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 import hi.sierra.greedy_meshing.client.sodium.GreedySodiumWorkState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -140,7 +141,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)) {
+        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
+                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
@@ -189,7 +191,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)) {
+        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
+                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
@@ -238,7 +241,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)) {
+        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
+                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }

@@ -65,6 +65,7 @@ import hi.sierra.greedy_meshing.client.GreedyDebugStore;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 import hi.sierra.greedy_meshing.client.GreedyVanillaWorkState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -151,7 +152,8 @@ public abstract class SectionCompilerMixin {
             if (localX >= 0 && localX < GreedyMesher.SECTION_SIZE
                     && localY >= 0 && localY < GreedyMesher.SECTION_SIZE
                     && localZ >= 0 && localZ < GreedyMesher.SECTION_SIZE
-                    && GreedyEligibility.isGreedyOpaqueCube(state, region, blockPos)) {
+                    && GreedyEligibility.isGreedyOpaqueCube(state, region, blockPos)
+                    && GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
                 int idx = GreedyMesher.index(localX, localY, localZ);
                 work.addEligible(idx, state);
                 return RenderShape.INVISIBLE;

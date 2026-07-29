@@ -57,6 +57,7 @@ import hi.sierra.greedy_meshing.client.GreedyDebugStore;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 import hi.sierra.greedy_meshing.client.vulkan.GreedyVulkanWorkState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -166,7 +167,9 @@ public abstract class VulkanBuildTaskMixin {
         GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
         BlockAndTintGetter world = work.world();
         BlockPos origin = work.sectionOrigin();
-        if (world == null || origin == null || !GreedyEligibility.isGreedyOpaqueCube(state, world, worldPos)) {
+        if (world == null || origin == null
+                || !GreedyEligibility.isGreedyOpaqueCube(state, world, worldPos)
+                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
             renderer.renderBlock(state, worldPos, pos);
             return;
         }
