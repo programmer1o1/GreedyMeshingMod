@@ -27,9 +27,9 @@ void main() {
 
         vec2 local;
         if (face == 0) {
-            local = fract(blockPos.xz);
-        } else if (face == 1) {
             local = vec2(fract(blockPos.x), 1.0 - fract(blockPos.z));
+        } else if (face == 1) {
+            local = fract(blockPos.xz);
         } else if (face == 2) {
             local = vec2(1.0 - fract(blockPos.x), 1.0 - fract(blockPos.y));
         } else if (face == 3) {

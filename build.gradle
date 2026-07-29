@@ -322,6 +322,21 @@ if (!hasSodium) {
     sourceSets.client.java {
         exclude '**/sodium/**'
     }
+} else {
+    // Sodium 0.8+ registers config via the sodium:config_api_user entrypoint instead of mixing into
+    // SodiumOptionsGUI, so SodiumOptionsGUIMixin's stonecutter guard (see the .java file) compiles it
+    // down to a plain class with no @Mixin annotation there. Mixin's loader treats an annotation-less
+    // class listed in a mixin config as a hard InvalidMixinException regardless of "required": false,
+    // so the entry itself must be dropped from the config on those versions, not just marked optional.
+    def sodiumVersionMatch = (hasSodium =~ /-(\d+)\.(\d+)\.\d+/)
+    def sodium08Plus = sodiumVersionMatch.find() && (sodiumVersionMatch.group(1) as int) == 0 && (sodiumVersionMatch.group(2) as int) >= 8
+    if (sodium08Plus) {
+        tasks.named('processClientResources') {
+            filesMatching('greedy_meshing.sodium.mixins.json') {
+                filter { String line -> line.contains('"SodiumOptionsGUIMixin"') ? null : line }
+            }
+        }
+    }
 }
 
 // VulkanMod is opt-in per version. The base greedy_meshing.vulkan.mixins.json ships an

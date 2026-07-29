@@ -5,6 +5,22 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1]
+
+### Fixed
+- **Top/bottom texture flip on merged quads** (issue #7): the shader-side UV
+  reconstruction used for greedy-merged UP/DOWN faces had those two faces' V
+  mapping swapped relative to Minecraft's actual cube-UV convention, mirroring
+  the texture on every merged top/bottom face. Most visible where a merged face
+  bordered an unmerged neighbor of a different block variant (e.g. a stone brick
+  slab next to a stone brick block).
+- **Sodium 0.8+ startup mixin crash**: `SodiumOptionsGUIMixin` compiles to a
+  no-op class with no `@Mixin` annotation on Sodium 0.8+ (config now registers
+  through the `sodium:config_api_user` entrypoint instead), which Mixin's loader
+  treated as a hard `InvalidMixinException` regardless of `"required": false`.
+  The entry is now dropped from the mixin config on those versions instead of
+  just being marked optional.
+
 ## [0.4.0]
 
 ### Added

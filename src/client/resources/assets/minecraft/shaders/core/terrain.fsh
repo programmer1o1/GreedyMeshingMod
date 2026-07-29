@@ -93,10 +93,10 @@ void main() {
         // Compute per-block local UV from world position.
         // V is inverted for side faces: texture V=0 is top of block, but Y increases upward.
         vec2 local;
-        if (face == 0) {        // DOWN:  U=+X, V=+Z
-            local = fract(blockPos.xz);
-        } else if (face == 1) { // UP:    U=+X, V=-Z
+        if (face == 0) {        // DOWN:  U=+X, V=-Z
             local = vec2(fract(blockPos.x), 1.0 - fract(blockPos.z));
+        } else if (face == 1) { // UP:    U=+X, V=+Z
+            local = fract(blockPos.xz);
         } else if (face == 2) { // NORTH: U=-X, V=-Y
             local = vec2(1.0 - fract(blockPos.x), 1.0 - fract(blockPos.y));
         } else if (face == 3) { // SOUTH: U=+X, V=-Y
