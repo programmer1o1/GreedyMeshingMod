@@ -36,7 +36,17 @@ public abstract class SodiumShaderLoaderMixin {
             ShaderType type,
             CallbackInfoReturnable<String> cir
     ) {
-        if (!"sodium".equals(identifier.getNamespace()) || !"blocks/block_layer_opaque".equals(identifier.getPath())) {
+        String namespace = identifier.getNamespace();
+        String path = identifier.getPath();
+        boolean sodiumTerrainShader = "sodium".equals(namespace)
+                && "blocks/block_layer_opaque".equals(path);
+        // Milkshade Dynamics redirects Sodium's terrain pipeline to its own shader resource. Its
+        // replacement preserves Sodium's v_TexCoord/u_BlockTex interface, so apply the same greedy
+        // UV reconstruction to it. Without this, every vertex keeps the sprite-centre UV emitted
+        // by the greedy path and merged faces render as a single flat colour (issue #5).
+        boolean milkshadeTerrainShader = "milkshade".equals(namespace)
+                && "sodium/block_layer_opaque".equals(path);
+        if (!sodiumTerrainShader && !milkshadeTerrainShader) {
             return;
         }
         String source = cir.getReturnValue();

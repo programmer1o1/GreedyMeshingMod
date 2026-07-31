@@ -5,6 +5,13 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.2]
+
+### Fixed
+- **Milkshade Dynamics compatibility** (issue #5): recognize Milkshade's
+  replacement Sodium terrain shader and apply Greedy Meshing's UV-retiling
+  patch to it, preventing merged block faces from rendering as flat colors.
+
 ## [0.4.1]
 
 ### Fixed
