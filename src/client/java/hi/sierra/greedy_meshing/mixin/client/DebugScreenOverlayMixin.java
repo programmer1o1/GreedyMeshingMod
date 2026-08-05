@@ -34,7 +34,7 @@ public abstract class DebugScreenOverlayMixin {
         register(Identifier.fromNamespaceAndPath("greedy_meshing", "stats"), new DebugScreenEntry() {
             @Override
             public void display(DebugScreenDisplayer displayer, Level level, LevelChunk clientChunk, LevelChunk serverChunk) {
-                if (!GreedyConfig.enabled()) return;
+                if (!GreedyConfig.enabled() || !GreedyConfig.debugScreenOverlay()) return;
 
                 GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
                 boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
@@ -94,7 +94,7 @@ public abstract class DebugScreenOverlayMixin {
         register(ResourceLocation.fromNamespaceAndPath("greedy_meshing", "stats"), new DebugScreenEntry() {
             @Override
             public void display(DebugScreenDisplayer displayer, Level level, LevelChunk clientChunk, LevelChunk serverChunk) {
-                if (!GreedyConfig.enabled()) return;
+                if (!GreedyConfig.enabled() || !GreedyConfig.debugScreenOverlay()) return;
 
                 GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
                 boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
@@ -157,7 +157,7 @@ public abstract class DebugScreenOverlayMixin {
 
     @Unique
     private static void greedyMeshing$addLines(List<String> lines) {
-        if (!GreedyConfig.enabled()) return;
+        if (!GreedyConfig.enabled() || !GreedyConfig.debugScreenOverlay()) return;
 
         GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
         boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
@@ -201,7 +201,7 @@ public abstract class DebugScreenOverlayMixin {
 
     @Inject(method = "getGameInformation", at = @At("RETURN"), require = 0)
     private void greedyMeshing$appendDebugInfo(CallbackInfoReturnable<List<String>> cir) {
-        if (!GreedyConfig.enabled()) return;
+        if (!GreedyConfig.enabled() || !GreedyConfig.debugScreenOverlay()) return;
 
         List<String> lines = cir.getReturnValue();
         GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();

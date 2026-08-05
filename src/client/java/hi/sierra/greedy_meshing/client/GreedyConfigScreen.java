@@ -103,6 +103,11 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.debugTrianglesHud = v)
                 .build());
 
+        general.addEntry(entries.startBooleanToggle(Component.literal("Debug Screen Overlay"), draft.debugScreenOverlay)
+                .setDefaultValue(true)
+                .setSaveConsumer(v -> draft.debugScreenOverlay = v)
+                .build());
+
         general.addEntry(entries.startFloatField(Component.literal("Mesh Opacity"), draft.meshOpacity)
                 .setDefaultValue(0.35f)
                 .setMin(0.0f)
