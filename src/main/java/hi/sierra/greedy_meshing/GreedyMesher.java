@@ -27,6 +27,13 @@ public final class GreedyMesher {
      */
     private static final int[][][] SWEEP_TO_BLOCK = buildSweepTable();
 
+    /**
+     * Inverse of {@link #SWEEP_TO_BLOCK}: for each face, maps a block index back to its packed
+     * sweep coordinate {@code (depth << 8) | (row << 4) | col}. This lets the binary sweep walk
+     * only the set bits of the visibility mask instead of probing all 4096 cells per face.
+     */
+    private static final int[][] BLOCK_TO_SWEEP = buildInverseSweepTable();
+
     private static final ThreadLocal<SweepState> SWEEP_TL = ThreadLocal.withInitial(SweepState::new);
     private static final ThreadLocal<BinarySweepState> BIN_SWEEP_TL = ThreadLocal.withInitial(BinarySweepState::new);
 
@@ -246,51 +253,81 @@ public final class GreedyMesher {
     private static List<GreedyQuad> binaryKeyedSweep(
             BlockState[] blocks, BitSet[] faceMasks, long[][] mergeKeys) {
 
-        List<GreedyQuad> out = new ArrayList<>();
+        // Pre-sized: a merged section routinely emits a few hundred quads, and the default
+        // capacity of 10 makes chunk-build threads walk a chain of array copies to get there.
+        List<GreedyQuad> out = new ArrayList<>(256);
         BinarySweepState bw = BIN_SWEEP_TL.get();
         int[] rows = bw.rows;
         long[] keys = bw.keys;
         int[] origins = bw.origins;
 
+        int[] depthCells = bw.depthCells;
+        int[] depthCounts = bw.depthCounts;
+
         for (Direction dir : ALL_FACES) {
             int fi = dir.ordinal();
             BitSet visible = faceMasks[fi];
+            // Whole faces are commonly fully culled (interior sections, flat terrain seen from
+            // above). Skipping them here avoids 16 depth slices of setup apiece.
+            if (visible.isEmpty()) continue;
+
             long[] faceKeys = mergeKeys[fi];
             int[][] table = SWEEP_TO_BLOCK[fi];
+            int[] inverse = BLOCK_TO_SWEEP[fi];
+
+            // Bucket the visible faces by depth slice by walking set bits only. Cost is now
+            // proportional to the number of visible faces rather than a flat 4096 probes per face.
+            java.util.Arrays.fill(depthCounts, 0);
+            for (int bi = visible.nextSetBit(0); bi >= 0; bi = visible.nextSetBit(bi + 1)) {
+                if (blocks[bi] == null) continue;
+                int depth = inverse[bi] >>> 8;
+                depthCells[(depth << 8) + depthCounts[depth]++] = bi;
+            }
 
             for (int depth = 0; depth < SECTION_SIZE; depth++) {
+                int cellCount = depthCounts[depth];
+                if (cellCount == 0) continue;
+
                 int[] lookup = table[depth];
+                int cellBase = depth << 8;
                 int nGroups = 0;
+                int lastGid = -1;
 
-                for (int row = 0; row < SECTION_SIZE; row++) {
-                    for (int col = 0; col < SECTION_SIZE; col++) {
-                        int bi = lookup[row * SECTION_SIZE + col];
-                        BlockState block = blocks[bi];
-                        if (block == null || !visible.get(bi)) continue;
+                for (int c = 0; c < cellCount; c++) {
+                    int bi = depthCells[cellBase + c];
+                    BlockState block = blocks[bi];
+                    int packed = inverse[bi];
+                    int row = (packed >>> 4) & 0xF;
+                    int col = packed & 0xF;
 
-                        long ck = ((long) System.identityHashCode(block) << 32) | (faceKeys[bi] & 0xFFFFFFFFL);
-                        int gid = -1;
+                    long ck = ((long) System.identityHashCode(block) << 32) | (faceKeys[bi] & 0xFFFFFFFFL);
+                    int gid = -1;
+                    // Runs of one block state dominate, so check the previous group before scanning.
+                    if (lastGid >= 0 && keys[lastGid] == ck) {
+                        gid = lastGid;
+                    } else {
                         for (int g = 0; g < nGroups; g++) {
                             if (keys[g] == ck) { gid = g; break; }
                         }
-                        if (gid == -1) {
-                            if (nGroups >= BinarySweepState.CAP) {
-                                if (!capWarned) {
-                                    capWarned = true;
-                                    LOGGER.warn("Greedy Meshing: hit BinarySweepState.CAP ({}) distinct merge-key groups "
-                                            + "in one depth-slice (face={}, depth={}) — remaining faces in this slice were "
-                                            + "dropped (not merged, not emitted). This warning only prints once.",
-                                            BinarySweepState.CAP, dir, depth);
-                                }
-                                break;
-                            }
-                            gid = nGroups++;
-                            keys[gid] = ck;
-                            origins[gid] = bi;
-                            for (int r = 0; r < SECTION_SIZE; r++) rows[gid * SECTION_SIZE + r] = 0;
-                        }
-                        rows[gid * SECTION_SIZE + row] |= 1 << col;
                     }
+                    if (gid == -1) {
+                        if (nGroups >= BinarySweepState.CAP) {
+                            if (!capWarned) {
+                                capWarned = true;
+                                LOGGER.warn("Greedy Meshing: hit BinarySweepState.CAP ({}) distinct merge-key groups "
+                                        + "in one depth-slice (face={}, depth={}): faces needing a further group in "
+                                        + "this slice were skipped (not merged, not emitted). Prints once.",
+                                        BinarySweepState.CAP, dir, depth);
+                            }
+                            continue;
+                        }
+                        gid = nGroups++;
+                        keys[gid] = ck;
+                        origins[gid] = bi;
+                        for (int r = 0; r < SECTION_SIZE; r++) rows[gid * SECTION_SIZE + r] = 0;
+                    }
+                    lastGid = gid;
+                    rows[gid * SECTION_SIZE + row] |= 1 << col;
                 }
 
                 for (int g = 0; g < nGroups; g++) {
@@ -362,6 +399,36 @@ public final class GreedyMesher {
         return t;
     }
 
+    /** Derived from {@link #SWEEP_TO_BLOCK} rather than re-deriving the axis mapping by hand. */
+    private static int[][] buildInverseSweepTable() {
+        int[][] inv = new int[ALL_FACES.length][TOTAL_BLOCKS];
+        for (int[] face : inv) {
+            java.util.Arrays.fill(face, -1);
+        }
+        for (Direction dir : ALL_FACES) {
+            int fi = dir.ordinal();
+            for (int depth = 0; depth < SECTION_SIZE; depth++) {
+                for (int row = 0; row < SECTION_SIZE; row++) {
+                    for (int col = 0; col < SECTION_SIZE; col++) {
+                        int bi = SWEEP_TO_BLOCK[fi][depth][row * SECTION_SIZE + col];
+                        inv[fi][bi] = (depth << 8) | (row << 4) | col;
+                    }
+                }
+            }
+        }
+        // The sweep table must be a bijection per face, or the sweep would read a bogus depth and
+        // silently emit misplaced geometry. Fail at class-load instead, where it is diagnosable.
+        for (int fi = 0; fi < inv.length; fi++) {
+            for (int bi = 0; bi < TOTAL_BLOCKS; bi++) {
+                if (inv[fi][bi] < 0) {
+                    throw new IllegalStateException(
+                            "Greedy Meshing: sweep table is not a bijection (face=" + fi + ", block=" + bi + ")");
+                }
+            }
+        }
+        return inv;
+    }
+
     // ── Types ────────────────────────────────────────────────────────
 
     @FunctionalInterface
@@ -400,5 +467,8 @@ public final class GreedyMesher {
         final int[] rows = new int[CAP * SECTION_SIZE];
         final long[] keys = new long[CAP];
         final int[] origins = new int[CAP];
+        /** Visible block indices bucketed by depth slice: slot {@code depth * 256 + n}. */
+        final int[] depthCells = new int[SECTION_SIZE * SECTION_SIZE * SECTION_SIZE];
+        final int[] depthCounts = new int[SECTION_SIZE];
     }
 }

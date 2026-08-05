@@ -284,6 +284,7 @@ public abstract class VulkanBuildTaskMixin {
         // so a section that stops being greedy doesn't keep its old outline).
         if (work.captureDebug()) {
             GreedyDebugStore.clearSection(work.sectionKey());
+            GreedyPerformanceStats.clearSectionGeometry(work.sectionKey());
         }
 
         BlockAndTintGetter world = work.world();
@@ -335,6 +336,7 @@ public abstract class VulkanBuildTaskMixin {
             }
         }
         GreedyPerformanceStats.onGreedySectionBuilt(work.eligibleCount(), merged.size(), emittedQuads, vanillaEquivalent);
+        GreedyPerformanceStats.setSectionGeometry(work.sectionKey(), emittedQuads, vanillaEquivalent);
         if (captureDebug) {
             GreedyDebugStore.setSectionQuads(work.sectionKey(), debugQuads);
         }

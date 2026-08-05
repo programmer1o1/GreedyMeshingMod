@@ -5,6 +5,43 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0]
+
+### Performance
+- **Chunk-build cost of the greedy sweep is now proportional to visible faces**
+  rather than a flat cost per section. The binary keyed sweep previously probed
+  all 4096 cells of every one of the six faces (24,576 probes per section) no
+  matter how few faces were actually visible. It now walks only the set bits of
+  the visibility mask, buckets them by depth slice, and skips empty slices
+  entirely. Emission order is unchanged (ascending block index within a depth
+  slice is exactly the old row-major order), so this is a pure speedup with no
+  effect on rendered output.
+- **Fully culled faces are skipped up front** via a mask emptiness check,
+  avoiding per-slice setup for the six-faces-culled case that dominates interior
+  and underground sections.
+- **Merge-group lookup checks the previous group first.** Runs of one block state
+  are the common case, which turns the linear scan over active groups into a
+  single comparison for most cells.
+- **Quad output list is pre-sized**, removing repeated array-copy growth from the
+  default capacity of 10 on chunk-build threads.
+
+### Added
+- F3 overlay now reports vertices removed and an estimated vertex-memory saving
+  for currently loaded terrain, alongside the existing cumulative quad counts.
+  Tracked per-section (added on build, removed on rebuild/unload-by-distance)
+  rather than accumulated for the whole session, so the figure reflects what's
+  actually loaded right now rather than climbing forever as you play. Vertex
+  count is exact; the byte figure assumes the vanilla 32-byte stride and is an
+  upper bound (Sodium packs smaller), so it is labelled as an estimate.
+- **Merge Oriented Blocks** (experimental, off by default): allows blocks
+  carrying a `facing`/`axis`/`rotation` property to merge, provided their baked
+  model is verified, by comparing baked UVs against exactly the mapping
+  `terrain.fsh` reconstructs, to be a plain six-face cube. Previously any such
+  property disqualified a block outright as a blunt proxy for "the model might
+  not be six plain faces," which excludes plenty of blocks (particularly
+  modded ones) that are. Raises the merge rate on normal terrain, where
+  eligibility was weakest. Report any block that renders wrong once merged.
+
 ## [0.4.2]
 
 ### Fixed

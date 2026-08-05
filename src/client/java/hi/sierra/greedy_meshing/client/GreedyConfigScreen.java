@@ -23,6 +23,9 @@ public final class GreedyConfigScreen {
                 .setTitle(Component.literal("Greedy Meshing"))
                 .setSavingRunnable(() -> {
                     GreedyConfig.apply(draft);
+                    // Both eligibility caches key on BlockState alone, but their verdicts now depend
+                    // on mergeOrientedBlocks, so they have to be dropped before chunks rebuild.
+                    GreedySpriteSupport.clearCache();
                     Minecraft mc = Minecraft.getInstance();
                     //? if >=26.2 {
                     /*if (mc.levelExtractor != null) {
@@ -62,6 +65,12 @@ public final class GreedyConfigScreen {
                 .setDefaultValue(false)
                 .setTooltip(Component.literal("Merge same-block faces into the largest possible quads, ignoring ambient-occlusion boundaries. Fewer quads; slightly coarser lighting on large flat surfaces."))
                 .setSaveConsumer(v -> draft.aggressiveGreedy = v)
+                .build());
+
+        general.addEntry(entries.startBooleanToggle(Component.literal("Merge Oriented Blocks"), draft.mergeOrientedBlocks)
+                .setDefaultValue(false)
+                .setTooltip(Component.literal("Allow blocks with a facing/axis/rotation property (e.g. some modded blocks) to merge, but only once their model is verified to be a plain six-face cube with standard UVs. Raises the merge rate on normal terrain. EXPERIMENTAL: broadens what greedy meshing touches; report any block that renders wrong once merged."))
+                .setSaveConsumer(v -> draft.mergeOrientedBlocks = v)
                 .build());
 
         // Greedy Water has no effect on these two backends (see GreedyEligibility.isGreedyWaterSource):

@@ -57,6 +57,10 @@ public final class GreedyConfig {
         return data.greedyWater;
     }
 
+    public static boolean mergeOrientedBlocks() {
+        return data.mergeOrientedBlocks;
+    }
+
     public static boolean debugWireframe() {
         return data.debugWireframe;
     }
@@ -82,6 +86,7 @@ public final class GreedyConfig {
         copy.enabled = data.enabled;
         copy.aggressiveGreedy = data.aggressiveGreedy;
         copy.greedyWater = data.greedyWater;
+        copy.mergeOrientedBlocks = data.mergeOrientedBlocks;
         copy.debugWireframe = data.debugWireframe;
         copy.debugComparison = data.debugComparison;
         copy.debugTrianglesHud = data.debugTrianglesHud;
@@ -93,6 +98,9 @@ public final class GreedyConfig {
     public static void apply(Data newData) {
         newData.clamp();
         data = newData;
+        // isGreedyOpaqueCube() consults mergeOrientedBlocks, so its per-BlockState cache would
+        // otherwise keep serving verdicts from the previous setting.
+        GreedyEligibility.clearCache();
         save();
     }
 
@@ -108,6 +116,12 @@ public final class GreedyConfig {
          *  rendering, so this never changes how non-flat water looks. No effect on VulkanMod (its
          *  per-quad translucency depth-sort breaks visibly when water is merged into large quads). */
         public boolean greedyWater = false;
+        /** Allow blocks carrying an orientation property (facing/axis/rotation) to merge when their
+         *  baked model is verified to be six full unit faces with the standard cube UV mapping.
+         *  The property name alone is a blunt proxy (plenty of such blocks are plain cubes), but
+         *  the ones that are not would render with stretched or rotated textures when merged, so
+         *  admission is gated on inspecting the actual model. Experimental, off by default. */
+        public boolean mergeOrientedBlocks = false;
         public boolean debugWireframe = false;
         public boolean debugComparison = false;
         public boolean debugTrianglesHud = false;

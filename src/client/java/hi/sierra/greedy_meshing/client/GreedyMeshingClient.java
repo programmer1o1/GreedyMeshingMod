@@ -36,6 +36,7 @@ public final class GreedyMeshingClient implements ClientModInitializer {
     private static Object lastAmbientOcclusion;
     private static Object lastGamma;
     private static Object lastLevel;
+    private static int prunePendingTicks;
 
     @Override
     public void onInitializeClient() {
@@ -70,6 +71,28 @@ public final class GreedyMeshingClient implements ClientModInitializer {
             GreedyPerformanceStats.reset();
             GreedyDebugStore.clear();
         }
+
+        greedyMeshing$pruneUnloadedSections(mc);
+    }
+
+    /**
+     * The live geometry totals are keyed by section and cleared when a section rebuilds, but no
+     * backend gives us an unload callback. Sections that scroll out of render distance would
+     * otherwise linger in the totals forever, so sweep them out periodically. Every two seconds is
+     * far more often than render distance can meaningfully change.
+     */
+    private static void greedyMeshing$pruneUnloadedSections(Minecraft mc) {
+        if (mc.player == null) {
+            return;
+        }
+        if (--prunePendingTicks > 0) {
+            return;
+        }
+        prunePendingTicks = 40;
+
+        // One section of slack so a section right at the edge is not dropped and immediately re-added.
+        int radius = mc.options.getEffectiveRenderDistance() + 1;
+        GreedyPerformanceStats.pruneBeyond(mc.player.getBlockX() >> 4, mc.player.getBlockZ() >> 4, radius);
 
         Object ambientOcclusion = readOptionValue(mc.options, "ambientOcclusion");
         Object gamma = readOptionValue(mc.options, "gamma");

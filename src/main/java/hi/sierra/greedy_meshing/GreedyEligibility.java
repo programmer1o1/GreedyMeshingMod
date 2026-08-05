@@ -88,6 +88,8 @@ public final class GreedyEligibility {
     //?}
 
     public static boolean isGreedyOpaqueCube(BlockState state, BlockGetter level, BlockPos pos) {
+        // Not cached across a config change: the oriented-block relaxation below reads config, so
+        // the cache is dropped by GreedyConfig.apply() (see clearCache callers).
         Boolean cached = CACHE.get(state);
         if (cached != null) {
             return cached;
@@ -102,13 +104,16 @@ public final class GreedyEligibility {
                 /*&& state.isSolidRender(level, pos)
                 *///?}
                 && state.isCollisionShapeFullBlock(level, pos)
-                && !hasOrientationProperty(state)
+                // When the relaxation is on, the property is no longer disqualifying on its own;
+                // GreedySpriteSupport then verifies the baked model really is a plain cube before
+                // any such block is admitted. Off by default, so the default path is unchanged.
+                && (!hasOrientationProperty(state) || GreedyConfig.mergeOrientedBlocks())
                 && !(FANCY_GRASS_MOD_PRESENT && FANCY_GRASS_BLOCKS.contains(state.getBlock()));
         CACHE.put(state, result);
         return result;
     }
 
-    private static boolean hasOrientationProperty(BlockState state) {
+    public static boolean hasOrientationProperty(BlockState state) {
         for (Property<?> property : state.getProperties()) {
             if (ORIENTATION_PROPERTIES.contains(property.getName())) {
                 return true;

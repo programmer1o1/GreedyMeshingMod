@@ -118,6 +118,9 @@ public abstract class SectionCompilerMixin {
         GreedyVanillaWorkState work = GREEDY_MESHING$STATE.get();
         work.reset(sectionPos);
         GreedyDebugStore.clearSection(sectionPos.asLong());
+        // Zero the section's live contribution up front so a rebuild that merges nothing leaves no
+        // stale geometry behind in the loaded-terrain totals.
+        GreedyPerformanceStats.clearSectionGeometry(sectionPos.asLong());
         GreedyPerformanceStats.onVanillaCompileHook();
     }
 
@@ -308,6 +311,7 @@ public abstract class SectionCompilerMixin {
             }
 
             GreedyPerformanceStats.onGreedySectionBuilt(work.eligibleCount(), merged.size(), emittedQuads, vanillaEquivalent);
+            GreedyPerformanceStats.setSectionGeometry(sectionPos.asLong(), emittedQuads, vanillaEquivalent);
             if (captureDebug) {
                 GreedyDebugStore.setSectionQuads(sectionPos.asLong(), debugQuads);
             }

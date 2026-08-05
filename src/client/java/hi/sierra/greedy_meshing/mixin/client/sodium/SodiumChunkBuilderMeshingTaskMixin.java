@@ -96,6 +96,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         work.sectionOrigin(new BlockPos(render.getOriginX(), render.getOriginY(), render.getOriginZ()));
         work.sectionKey(SectionPos.asLong(render.getChunkX(), render.getChunkY(), render.getChunkZ()));
         GreedyDebugStore.clearSection(work.sectionKey());
+        GreedyPerformanceStats.clearSectionGeometry(work.sectionKey());
         work.world(getWorldSlice(buildContext));
         GreedyMesher.clearFaceMaskArray(GREEDY_MESHING$VISIBLE.get());
         GreedyPerformanceStats.onSodiumTaskHook();
@@ -430,6 +431,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             }
             if (!merged.isEmpty()) {
                 GreedyPerformanceStats.onGreedySectionBuilt(work.eligibleCount(), merged.size(), emittedQuads, vanillaEquivalent);
+                GreedyPerformanceStats.setSectionGeometry(work.sectionKey(), emittedQuads, vanillaEquivalent);
             }
 
             if (work.captureDebug()) {
