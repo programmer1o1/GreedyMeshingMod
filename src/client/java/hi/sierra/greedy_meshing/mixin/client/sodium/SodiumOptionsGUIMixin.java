@@ -1,6 +1,6 @@
 package hi.sierra.greedy_meshing.mixin.client.sodium;
 
-//? if <1.21.11 {
+//? if SODIUM_OLD_API {
 import net.caffeinemc.mods.sodium.client.gui.SodiumOptionsGUI;
 import net.caffeinemc.mods.sodium.client.gui.options.OptionPage;
 import net.minecraft.client.gui.screens.Screen;
@@ -24,6 +24,7 @@ public abstract class SodiumOptionsGUIMixin {
 }
 //? } else {
 public class SodiumOptionsGUIMixin {
-    // No-op on Sodium 0.8+ (1.21.11+): config is registered via the sodium:config_api_user entrypoint instead.
+    // No-op when this version's Sodium pin is 0.8+: SodiumOptionsGUI doesn't exist there, config is
+    // registered via the sodium:config_api_user entrypoint instead (see GreedySodiumConfigEntryPoint).
 }
 //?}

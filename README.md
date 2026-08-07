@@ -31,8 +31,11 @@ Instead of rendering each block face as a separate quad, Greedy Meshing scans ea
 |-----------|--------|--------|
 | 1.21 - 1.21.11 | Fabric | Supported |
 | 26.1 - 26.2 | Fabric | Supported |
+| Any | NeoForge (via Sinytra Connector) | Not officially supported |
 
 Built with [Stonecutter](https://github.com/stonecutter-versioning/stonecutter) for multi-version support.
+
+> **NeoForge via Sinytra Connector:** this is a Fabric-only mod. Running it under Connector may work, but Connector's Fabric-on-NeoForge translation is known to be inconsistent with mixins that target another mod's internals (such as this mod's Sodium integration), so behavior there isn't guaranteed. Sodium's own resource-pack scanner warning about replaced terrain shaders is expected and harmless on any loader: the actual Sodium UV fix is applied via a mixin into Sodium's in-memory shader source, not through the replaced vanilla shader files.
 
 ## Dependencies
 

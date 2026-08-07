@@ -5,6 +5,27 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1]
+
+### Fixed
+- **Sodium options page missing on 1.21.1's 0.8.x beta branch** (issue #9's underlying cause):
+  Sodium now also ships a concurrent 0.8.x release line for 1.21.1 itself, not just newer Minecraft
+  versions, so the mod's old/new Sodium-API detection was keyed on Minecraft version and wrongly
+  assumed 1.21.1 could only ever have the pre-0.8 `SodiumOptionsGUI` API. Detection is now driven by
+  each Minecraft version's actual pinned Sodium version(s), and 1.21.1 compiles both the legacy
+  mixin and the new `sodium:config_api_user` entrypoint into the same jar, so whichever Sodium line
+  is actually installed gets a working options page instead of a silent `ClassNotFoundException`.
+- **Merged blocks rendering with wrong/tiled textures after a resource pack swap** (e.g. switching
+  to a higher-resolution pack like Faithful 64x): eligibility and sprite-compatibility verdicts are
+  cached per `BlockState`, but nothing invalidated that cache when the active resource pack changed
+  — only reopening the mod's own config screen did, as an unintended side effect of applying
+  settings. A resource-reload listener now clears both caches and forces a re-render on every
+  resource pack change, not just when the config screen is touched.
+
+### Added
+- **Merge Oriented Blocks** is now exposed on Sodium's own in-game options page (both the legacy and
+  new Sodium config APIs), matching the existing Mod Menu / Cloth Config toggle.
+
 ## [0.5.0]
 
 ### Performance

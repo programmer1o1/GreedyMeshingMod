@@ -57,6 +57,7 @@ public final class GreedyMeshingClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register(GreedyDebugHudRenderer::render);
         //?}
         ClientTickEvents.END_CLIENT_TICK.register(GreedyMeshingClient::onClientTick);
+        GreedyResourceReloadListener.register();
     }
 
     private static void onClientTick(Minecraft mc) {

@@ -1,6 +1,6 @@
 package hi.sierra.greedy_meshing.client.sodium;
 
-//? if <1.21.11 {
+//? if SODIUM_OLD_API {
 import com.google.common.collect.ImmutableList;
 import net.caffeinemc.mods.sodium.client.gui.options.OptionFlag;
 import net.caffeinemc.mods.sodium.client.gui.options.OptionGroup;
@@ -62,6 +62,13 @@ public final class GreedySodiumOptionsPage {
                         .setBinding((d, v) -> d.greedyWater = v, d -> d.greedyWater)
                         .setControl(TickBoxControl::new)
                         .setEnabled(() -> !greedyWaterUnsupported)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
+                .add(OptionImpl.<GreedyConfig.Data, Boolean>createBuilder(Boolean.class, storage)
+                        .setName(Component.literal("Merge Oriented Blocks"))
+                        .setTooltip(Component.literal("Allow blocks with a facing/axis/rotation property (e.g. some modded blocks) to merge, but only once their model is verified to be a plain six-face cube with standard UVs. Raises the merge rate on normal terrain. EXPERIMENTAL: broadens what greedy meshing touches; report any block that renders wrong once merged."))
+                        .setBinding((d, v) -> d.mergeOrientedBlocks = v, d -> d.mergeOrientedBlocks)
+                        .setControl(TickBoxControl::new)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
                 .build();

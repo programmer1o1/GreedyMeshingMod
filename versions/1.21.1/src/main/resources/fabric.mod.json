@@ -24,6 +24,9 @@
     ],
     "modmenu": [
       "hi.sierra.greedy_meshing.client.GreedyModMenuIntegration"
+    ],
+    "sodium:config_api_user": [
+      "hi.sierra.greedy_meshing.client.sodium.GreedySodiumConfigEntryPoint"
     ]
   },
   "mixins": [

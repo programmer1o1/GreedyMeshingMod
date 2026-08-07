@@ -168,6 +168,23 @@ dependencies {
             }
         }
 
+        // Sodium also runs a concurrent 0.8.x release branch on some older MC versions (see the
+        // deps.sodium_new_api comment in that version's gradle.properties). That branch dropped
+        // SodiumOptionsGUI in favour of the sodium:config_api_user entrypoint, so GreedySodiumConfigEntryPoint
+        // needs those API classes on the compile classpath too, without disturbing the deps.sodium
+        // pin above (which stays on the stable line for dev/runtime and for the old mixin).
+        // Addressed by Sodium's Modrinth project ID (AANobbMI) rather than its "sodium" slug: Loom
+        // derives a mod's remapped-artifact identity from the dependency coordinate, and two pins
+        // sharing the same "sodium" coordinate get the SAME derived identity regardless of which
+        // Gradle configuration declares them — Gradle's version conflict resolution then collapses
+        // them to whichever version is higher, silently dropping the other API surface entirely
+        // (verified: with both as "sodium", 0.6.13 lost to 0.8.12 and SodiumOptionsGUI vanished from
+        // the compile classpath). The differently-named coordinate keeps the two identities distinct.
+        def sodiumNewApiVersion = findProperty('deps.sodium_new_api')
+        if (sodiumNewApiVersion) {
+            modCompileOnly "maven.modrinth:AANobbMI:${sodiumNewApiVersion}"
+        }
+
         // VulkanMod: optional alternate renderer backend. Modrinth maven only.
         // NOTE: pin by the unique Modrinth version ID (not the version_number), because several
         // VulkanMod releases share a number (e.g. 0.5.3 exists for both 1.21-1.21.1 and 1.21.2-1.21.3)
@@ -324,10 +341,13 @@ if (!hasSodium) {
     }
 } else {
     // Sodium 0.8+ registers config via the sodium:config_api_user entrypoint instead of mixing into
-    // SodiumOptionsGUI, so SodiumOptionsGUIMixin's stonecutter guard (see the .java file) compiles it
-    // down to a plain class with no @Mixin annotation there. Mixin's loader treats an annotation-less
-    // class listed in a mixin config as a hard InvalidMixinException regardless of "required": false,
-    // so the entry itself must be dropped from the config on those versions, not just marked optional.
+    // SodiumOptionsGUI, so SodiumOptionsGUIMixin's stonecutter guard (SODIUM_OLD_API, see the .java
+    // file) compiles it down to a plain class with no @Mixin annotation there. Mixin's loader treats
+    // an annotation-less class listed in a mixin config as a hard InvalidMixinException regardless of
+    // "required": false, so the entry itself must be dropped from the config on those versions, not
+    // just marked optional. Keyed on the PRIMARY deps.sodium pin only (not deps.sodium_new_api) since
+    // that's what SODIUM_OLD_API itself is keyed on — versions with a secondary 0.8.x pin alongside a
+    // <0.8 primary pin (e.g. 1.21.1) keep this mixin real, because the primary pin still lacks the new API.
     def sodiumVersionMatch = (hasSodium =~ /-(\d+)\.(\d+)\.\d+/)
     def sodium08Plus = sodiumVersionMatch.find() && (sodiumVersionMatch.group(1) as int) == 0 && (sodiumVersionMatch.group(2) as int) >= 8
     if (sodium08Plus) {
