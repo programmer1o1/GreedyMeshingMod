@@ -27,6 +27,13 @@ import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
 //? if UNOBFUSCATED {
+/*import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+*///?} else if >=1.21.11 {
+/*import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+*///?} else {
+import net.minecraft.client.renderer.RenderType;
+//?}
+//? if UNOBFUSCATED {
 /*import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
@@ -56,6 +63,7 @@ import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 import hi.sierra.greedy_meshing.GreedyMesher;
 import hi.sierra.greedy_meshing.client.GreedyDebugStore;
+import hi.sierra.greedy_meshing.client.GreedyEmissiveSupport;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
@@ -412,16 +420,49 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                     VertexConsumer consumer = modelBuilder.asFallbackVertexConsumer(material, collector);
                     if (consumer == null) continue;
 
-                    if (shaderPackActive) {
+                    if (shaderPackActive || !GreedySpriteSupport.supportsMergedShaderSprite(layer.sprite())) {
                         emittedQuads += emitTiledQuads(consumer, quad,
                                 layer.sprite().getU0(), layer.sprite().getU1(),
                                 layer.sprite().getV0(), layer.sprite().getV1(),
-                                layer.tinted(), layer.tintIndex(), work.world(), baseX, baseY, baseZ, work);
+                                layer.tinted(), layer.tintIndex(), work.world(), baseX, baseY, baseZ, work, false);
                     } else {
                         emittedQuads += emitMergedQuad(consumer, quad,
                                 layer.sprite().getU0(), layer.sprite().getU1(),
                                 layer.sprite().getV0(), layer.sprite().getV1(),
-                                layer.tinted(), layer.tintIndex(), work.world(), baseX, baseY, baseZ, work);
+                                layer.tinted(), layer.tintIndex(), work.world(), baseX, baseY, baseZ, work,
+                                layer.sprite().contents().width());
+                    }
+                    TextureAtlasSprite emissive = GreedyEmissiveSupport.find(layer.sprite());
+                    if (emissive != null) {
+                        // _e textures contain transparent pixels around the glowing pixels.  On
+                        // 26.2, keep this overlay in Sodium's cutout material; putting it in the
+                        // solid material makes the transparent background opaque and stretches a
+                        // dark/bright copy over the whole ore face.
+                        //? if UNOBFUSCATED {
+                        /*net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.Material emissiveMaterial =
+                                DefaultMaterials.forChunkLayer(ChunkSectionLayer.CUTOUT);
+                        ChunkModelBuilder emissiveModelBuilder = buffers.get(emissiveMaterial);
+                        VertexConsumer emissiveConsumer = emissiveModelBuilder.asFallbackVertexConsumer(emissiveMaterial, collector);
+                        if (emissiveConsumer != null) {
+                            emittedQuads += emitTiledQuads(emissiveConsumer, quad,
+                                    emissive.getU0(), emissive.getU1(), emissive.getV0(), emissive.getV1(),
+                                    false, -1, work.world(), baseX, baseY, baseZ, work, true);
+                        }
+                        *///?} else {
+                        //? if >=1.21.11 {
+                        /*net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.Material emissiveMaterial =
+                                DefaultMaterials.forChunkLayer(ChunkSectionLayer.CUTOUT);
+                        *///?} else {
+                        net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.Material emissiveMaterial = DefaultMaterials.CUTOUT;
+                        //?}
+                        ChunkModelBuilder emissiveModelBuilder = buffers.get(emissiveMaterial);
+                        VertexConsumer emissiveConsumer = emissiveModelBuilder.asFallbackVertexConsumer(emissiveMaterial, collector);
+                        if (emissiveConsumer != null) {
+                            emittedQuads += emitTiledQuads(emissiveConsumer, quad,
+                                    emissive.getU0(), emissive.getU1(), emissive.getV0(), emissive.getV1(),
+                                    false, -1, work.world(), baseX, baseY, baseZ, work, true);
+                        }
+                        //?}
                     }
                     vanillaEquivalent += blockFaces;
                 }
@@ -716,12 +757,13 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             float u0, float u1, float v0, float v1,
             boolean applyTint, int tintIndex, BlockAndTintGetter world,
             int baseX, int baseY, int baseZ,
-            GreedySodiumWorkState work
+            GreedySodiumWorkState work,
+            int spriteSize
     ) {
         int W = quad.width(), H = quad.height();
         if (W == 1 && H == 1) {
             emitSodiumSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
-                    applyTint, tintIndex, world, baseX, baseY, baseZ, work, true);
+                    applyTint, tintIndex, world, baseX, baseY, baseZ, work, true, spriteSize);
             return 1;
         }
         int count = 0;
@@ -730,7 +772,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             for (int su = 0; su < W; su += GREEDY_MESHING$LIGHT_STEP) {
                 int sw = Math.min(GREEDY_MESHING$LIGHT_STEP, W - su);
                 emitSodiumSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
-                        applyTint, tintIndex, world, baseX, baseY, baseZ, work, false);
+                        applyTint, tintIndex, world, baseX, baseY, baseZ, work, false, spriteSize);
                 count++;
             }
         }
@@ -745,7 +787,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             boolean applyTint, int tintIndex, BlockAndTintGetter world,
             int baseX, int baseY, int baseZ,
             GreedySodiumWorkState work,
-            boolean fullAO
+            boolean fullAO,
+            int spriteSize
     ) {
         Direction face = quad.face();
         int qx = quad.x(), qy = quad.y(), qz = quad.z();
@@ -784,7 +827,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             tintB[i] = (tint & 0xFF) / 255.0f;
         }
 
-        float faceAlpha = (246.0f + face.ordinal()) / 255.0f;
+        float faceAlpha = GreedySpriteSupport.mergedFaceAlpha(face, spriteSize);
         float cu = (u0 + u1) * 0.5f, cv = (vv0 + vv1) * 0.5f;
         consumer.addVertex(c[0],c[1],c[2]).setColor(brightness[0]*tintR[0],brightness[0]*tintG[0],brightness[0]*tintB[0],faceAlpha).setUv(cu,cv).setLight(lightmap[0]).setNormal(nx,ny,nz);
         consumer.addVertex(c[3],c[4],c[5]).setColor(brightness[1]*tintR[1],brightness[1]*tintG[1],brightness[1]*tintB[1],faceAlpha).setUv(cu,cv).setLight(lightmap[1]).setNormal(nx,ny,nz);
@@ -805,7 +848,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             int baseX,
             int baseY,
             int baseZ,
-            GreedySodiumWorkState work
+            GreedySodiumWorkState work,
+            boolean fullbright
     ) {
         float[] c = work.scratchCorners;
         BlockPos.MutableBlockPos tintPos = work.scratchTintPos;
@@ -841,12 +885,23 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                 int wy = tileBlockCoord(baseY, c, 1, quad.face().getStepY(), fu0, fv0);
                 int wz = tileBlockCoord(baseZ, c, 2, quad.face().getStepZ(), fu0, fv0);
 
-                GreedyLighting.computeTileLighting(world, quad.state(), quad.face(), wx, wy, wz, lighting);
+                if (fullbright) {
+                    java.util.Arrays.fill(lighting.brightness, 1.0f);
+                    java.util.Arrays.fill(lighting.lightmap, 0xF000F0);
+                } else {
+                    GreedyLighting.computeTileLighting(world, quad.state(), quad.face(), wx, wy, wz, lighting);
+                }
                 int tint = applyTint ? tintColorForTile(quad.state(), world, wx, wy, wz, tintPos, blockColors, tintIndex) : 0xFFFFFF;
                 float tintR = ((tint >> 16) & 0xFF) / 255.0f;
                 float tintG = ((tint >> 8) & 0xFF) / 255.0f;
                 float tintB = (tint & 0xFF) / 255.0f;
 
+                if (fullbright) {
+                    x00 += nx * 0.001f; y00 += ny * 0.001f; z00 += nz * 0.001f;
+                    x10 += nx * 0.001f; y10 += ny * 0.001f; z10 += nz * 0.001f;
+                    x11 += nx * 0.001f; y11 += ny * 0.001f; z11 += nz * 0.001f;
+                    x01 += nx * 0.001f; y01 += ny * 0.001f; z01 += nz * 0.001f;
+                }
                 consumer.addVertex(x00, y00, z00)
                         .setColor(lighting.brightness[0] * tintR, lighting.brightness[0] * tintG, lighting.brightness[0] * tintB, 1.0f)
                         .setUv(u0, vv0).setLight(lighting.lightmap[0]).setNormal(nx, ny, nz);

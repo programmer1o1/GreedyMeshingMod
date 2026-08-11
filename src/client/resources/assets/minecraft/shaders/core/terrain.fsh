@@ -77,14 +77,25 @@ vec4 sampleRGSS(sampler2D source, vec2 uv, vec2 pixelSize) {
 
 void main() {
     int faceId = int(round(greedyFaceId));
-    bool isGreedy = faceId >= 246 && faceId <= 251;
+    bool isGreedy = faceId >= 234 && faceId <= 251;
 
     vec4 color;
     if (isGreedy) {
-        int face = faceId - 246; // 0=DOWN 1=UP 2=NORTH 3=SOUTH 4=WEST 5=EAST
+        int spritePixels;
+        int face; // 0=DOWN 1=UP 2=NORTH 3=SOUTH 4=WEST 5=EAST
+        if (faceId >= 234 && faceId <= 239) {
+            spritePixels = 64;
+            face = faceId - 234;
+        } else if (faceId >= 240 && faceId <= 245) {
+            spritePixels = 32;
+            face = faceId - 240;
+        } else {
+            spritePixels = 16;
+            face = faceId - 246;
+        }
 
         vec2 pixelSize = 1.0 / vec2(TextureSize);
-        vec2 spriteSize = 16.0 * pixelSize;
+        vec2 spriteSize = float(spritePixels) * pixelSize;
         // texCoord0 is the sprite CENTER (all 4 vertices share the same UV).
         // Center minus half-size gives the exact sprite origin regardless of
         // atlas padding from any mipmap level.
@@ -123,7 +134,14 @@ void main() {
         }
         vec2 texelScreenSize = sqrt(dPdx * dPdx + dPdy * dPdy);
 
-        color = sampleNearest(Sampler0, uv, pixelSize, dPdx, dPdy, texelScreenSize) * vertexColor;
+        // The custom nearest/RGSS path is calibrated for vanilla 16x sprites.  Applying
+        // that filter to a 32x/64x atlas region overestimates the footprint and can collapse
+        // high-resolution textures into a flat colour.  Let the sampler use the resource
+        // pack's filtering for high-resolution sprites; the UV reconstruction above remains
+        // exact and still repeats one complete sprite per block.
+        color = (spritePixels > 16
+                ? texture(Sampler0, uv)
+                : sampleNearest(Sampler0, uv, pixelSize, dPdx, dPdy, texelScreenSize)) * vertexColor;
         // Restore full opacity for solid blocks (face alpha was only a flag).
         // But preserve texture alpha for cutout layers (grass overlay transparency).
 #ifndef ALPHA_CUTOUT

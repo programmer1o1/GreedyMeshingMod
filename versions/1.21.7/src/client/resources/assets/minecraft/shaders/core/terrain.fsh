@@ -16,13 +16,14 @@ out vec4 fragColor;
 
 void main() {
     int faceId = int(round(greedyFaceId));
-    bool isGreedy = faceId >= 246 && faceId <= 251;
+    bool isGreedy = faceId >= 234 && faceId <= 251;
 
     vec4 color;
     if (isGreedy) {
-        int face = faceId - 246;
+        int spritePixels = faceId >= 234 && faceId <= 239 ? 64 : (faceId >= 240 && faceId <= 245 ? 32 : 16);
+        int face = faceId >= 234 && faceId <= 239 ? faceId - 234 : (faceId >= 240 && faceId <= 245 ? faceId - 240 : faceId - 246);
         ivec2 atlasSize = textureSize(Sampler0, 0);
-        vec2 spriteSize = 16.0 / vec2(atlasSize);
+        vec2 spriteSize = float(spritePixels) / vec2(atlasSize);
         vec2 spriteOrigin = texCoord0 - spriteSize * 0.5;
 
         vec2 local;

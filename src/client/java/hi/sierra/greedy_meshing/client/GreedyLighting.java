@@ -40,7 +40,7 @@ public final class GreedyLighting {
         // for fluids before (only opaque blocks used it). Flat per-face lighting matches how vanilla
         // actually lights water (no per-corner AO) and sidesteps that entirely-untested-for-water path.
         if (!useSmoothLighting(state) || state.is(Blocks.WATER)) {
-            fillFlatLighting(world, face, worldX, worldY, worldZ, scratch);
+            fillFlatLighting(world, state, face, worldX, worldY, worldZ, scratch);
             return;
         }
 
@@ -300,6 +300,7 @@ public final class GreedyLighting {
 
     private static void fillFlatLighting(
             BlockAndTintGetter world,
+            BlockState state,
             Direction face,
             int worldX,
             int worldY,
@@ -307,7 +308,15 @@ public final class GreedyLighting {
             Scratch scratch
     ) {
         BlockPos.MutableBlockPos samplePos = scratch.mutablePos;
-        samplePos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
+        // Emissive blocks must retain their own block light when a translucent block is
+        // adjacent to the face. Sampling the adjacent block is correct for ordinary opaque
+        // blocks, but tinted glass intentionally blocks light, so using its lightmap position
+        // makes sea lanterns (and other light-emitting blocks) render dark through the glass.
+        if (state.getLightEmission() > 0) {
+            samplePos.set(worldX, worldY, worldZ);
+        } else {
+            samplePos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
+        }
         BlockState faceState = world.getBlockState(samplePos);
         int packedLight = greedyMeshing$getLightColor(world, faceState, samplePos);
         //? if UNOBFUSCATED {

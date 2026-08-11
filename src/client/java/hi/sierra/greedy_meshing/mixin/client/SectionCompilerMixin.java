@@ -62,6 +62,7 @@ import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 import hi.sierra.greedy_meshing.GreedyMesher;
 import hi.sierra.greedy_meshing.client.GreedyDebugStore;
+import hi.sierra.greedy_meshing.client.GreedyEmissiveSupport;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
@@ -290,18 +291,33 @@ public abstract class SectionCompilerMixin {
                                     ? ItemBlockRenderTypes.getRenderLayer(quad.state().getFluidState())
                                     : ItemBlockRenderTypes.getChunkRenderType(quad.state()));
                     //?}
-                    if (shaderPackActive) {
+                    if (shaderPackActive || !GreedySpriteSupport.supportsMergedShaderSprite(faceLayer.sprite())) {
                         emittedQuads += emitTiledQuads(layerBuilder, quad,
                                 faceLayer.sprite().getU0(), faceLayer.sprite().getU1(),
                                 faceLayer.sprite().getV0(), faceLayer.sprite().getV1(),
                                 faceLayer.tinted(), faceLayer.tintIndex(), renderSectionRegion, baseX, baseY, baseZ,
-                                work);
+                                work, false);
                     } else {
                         emittedQuads += emitGreedyQuad(layerBuilder, quad,
                                 faceLayer.sprite().getU0(), faceLayer.sprite().getU1(),
                                 faceLayer.sprite().getV0(), faceLayer.sprite().getV1(),
                                 faceLayer.tinted(), faceLayer.tintIndex(), renderSectionRegion, baseX, baseY, baseZ,
-                                work);
+                                work, faceLayer.sprite().contents().width());
+                    }
+                    TextureAtlasSprite emissive = GreedyEmissiveSupport.find(faceLayer.sprite());
+                    if (emissive != null) {
+                        // OptiFine-style _e textures use transparent pixels for the non-glowing
+                        // parts.  Do not put them in the solid buffer: the solid shader forces
+                        // alpha to one and turns the transparent background into enlarged dark
+                        // pixels.  The cutout buffer preserves the emissive texture's alpha.
+                        //? if >=1.21.6 {
+                        BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, ChunkSectionLayer.CUTOUT);
+                        //?} else {
+                        /*BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, RenderType.cutout());
+                        *///?}
+                        emittedQuads += emitTiledQuads(emissiveBuilder, quad,
+                                emissive.getU0(), emissive.getU1(), emissive.getV0(), emissive.getV1(),
+                                false, -1, renderSectionRegion, baseX, baseY, baseZ, work, true);
                     }
                     vanillaEquivalent += blockFaces;
                 }
@@ -616,15 +632,16 @@ public abstract class SectionCompilerMixin {
             boolean applyTint, int tintIndex, RenderChunkRegion region,
             //?}
             int baseX, int baseY, int baseZ,
-            GreedyVanillaWorkState work
+            GreedyVanillaWorkState work,
+            int spriteSize
     ) {
         int W = quad.width();
         int H = quad.height();
 
         // Single-block: emit directly with full AO
         if (W == 1 && H == 1) {
-            emitSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
-                    applyTint, tintIndex, region, baseX, baseY, baseZ, work, true);
+                emitSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
+                    applyTint, tintIndex, region, baseX, baseY, baseZ, work, true, spriteSize);
             return 1;
         }
 
@@ -635,7 +652,7 @@ public abstract class SectionCompilerMixin {
             for (int su = 0; su < W; su += LIGHT_STEP) {
                 int sw = Math.min(LIGHT_STEP, W - su);
                 emitSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
-                        applyTint, tintIndex, region, baseX, baseY, baseZ, work, false);
+                        applyTint, tintIndex, region, baseX, baseY, baseZ, work, false, spriteSize);
                 count++;
             }
         }
@@ -654,7 +671,8 @@ public abstract class SectionCompilerMixin {
             //?}
             int baseX, int baseY, int baseZ,
             GreedyVanillaWorkState work,
-            boolean fullAO
+            boolean fullAO,
+            int spriteSize
     ) {
         // Build a temporary sub-quad with offset position and sub-dimensions
         Direction face = quad.face();
@@ -674,7 +692,7 @@ public abstract class SectionCompilerMixin {
         float[] c = work.scratchCorners;
         float top = greedyMeshing$waterSurfaceTop(region, sub, baseX, baseY, baseZ, work.scratchTintPos);
         fillCorners(c, sub, top);
-        float faceAlpha = (246.0f + face.ordinal()) / 255.0f;
+        float faceAlpha = GreedySpriteSupport.mergedFaceAlpha(face, spriteSize);
         float nx = face.getStepX(), ny = face.getStepY(), nz = face.getStepZ();
 
         BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
@@ -735,7 +753,8 @@ public abstract class SectionCompilerMixin {
             boolean applyTint, int tintIndex, RenderChunkRegion region,
             //?}
             int baseX, int baseY, int baseZ,
-            GreedyVanillaWorkState work
+            GreedyVanillaWorkState work,
+            boolean fullbright
     ) {
         float nx = quad.face().getStepX(), ny = quad.face().getStepY(), nz = quad.face().getStepZ();
         boolean flipV = quad.face().getAxis().isHorizontal();
@@ -766,7 +785,12 @@ public abstract class SectionCompilerMixin {
                 int wy = baseY + (int) Math.floor(greedyMeshing$interpolate(c, fu0 + 0.001f, fv0 + 0.001f, 1));
                 int wz = baseZ + (int) Math.floor(greedyMeshing$interpolate(c, fu0 + 0.001f, fv0 + 0.001f, 2));
 
-                GreedyLighting.computeTileLighting(region, quad.state(), quad.face(), wx, wy, wz, lighting);
+                if (fullbright) {
+                    java.util.Arrays.fill(lighting.brightness, 1.0f);
+                    java.util.Arrays.fill(lighting.lightmap, 0xF000F0);
+                } else {
+                    GreedyLighting.computeTileLighting(region, quad.state(), quad.face(), wx, wy, wz, lighting);
+                }
 
                 int tint = applyTint ? tintColorForTile(quad.state(), region, wx, wy, wz, tintPos, blockColors, tintIndex) : 0xFFFFFF;
                 float tintR = ((tint >> 16) & 0xFF) / 255.0f;
@@ -785,6 +809,11 @@ public abstract class SectionCompilerMixin {
                         case 1 -> { px = x10; py = y10; pz = z10; pu = u1; pv = tv0; }
                         case 2 -> { px = x11; py = y11; pz = z11; pu = u1; pv = tv1; }
                         default -> { px = x01; py = y01; pz = z01; pu = u0; pv = tv1; }
+                    }
+                    if (fullbright) {
+                        px += nx * 0.001f;
+                        py += ny * 0.001f;
+                        pz += nz * 0.001f;
                     }
                     consumer.addVertex(px, py, pz, packedColor, pu, pv, 0, lighting.lightmap[vi], nx, ny, nz);
                 }

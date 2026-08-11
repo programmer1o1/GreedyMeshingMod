@@ -5,6 +5,16 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.2]
+
+### Fixed
+- **Faithful 64x and other high-resolution resource packs**: merged terrain now reconstructs 16x,
+  32x, and 64x sprite UVs correctly across vanilla, Sodium, and Vulkan shader paths.
+- **OptiFine-style emissive textures**: `_e` overlays now preserve transparent pixels and use the
+  correct cutout material, preventing stretched or fullbright backgrounds on glowing ores.
+- **Resource-pack emissive atlas compatibility** across the 1.21.x and 26.x atlas APIs.
+- **Light-emitting blocks behind translucent faces** now retain their own lightmap sampling.
+
 ## [0.5.1]
 
 ### Fixed

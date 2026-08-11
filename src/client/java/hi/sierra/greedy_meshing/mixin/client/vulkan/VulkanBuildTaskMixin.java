@@ -54,6 +54,7 @@ import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 import hi.sierra.greedy_meshing.GreedyMesher;
 import hi.sierra.greedy_meshing.client.GreedyDebugStore;
+import hi.sierra.greedy_meshing.client.GreedyEmissiveSupport;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
@@ -325,10 +326,24 @@ public abstract class VulkanBuildTaskMixin {
             int blockFaces = quad.width() * quad.height();
             TerrainBuilder builder = quad.state().is(Blocks.WATER) ? translucent : solid;
             for (FaceAppearance layer : layers) {
-                emittedQuads += emitMergedQuad(builder, quad,
-                        layer.sprite().getU0(), layer.sprite().getU1(),
-                        layer.sprite().getV0(), layer.sprite().getV1(),
-                        layer.tinted(), layer.tintIndex(), world, baseX, baseY, baseZ, work);
+                if (GreedySpriteSupport.supportsMergedShaderSprite(layer.sprite())) {
+                    emittedQuads += emitMergedQuad(builder, quad,
+                            layer.sprite().getU0(), layer.sprite().getU1(),
+                            layer.sprite().getV0(), layer.sprite().getV1(),
+                            layer.tinted(), layer.tintIndex(), world, baseX, baseY, baseZ, work,
+                            layer.sprite().contents().width());
+                } else {
+                    emittedQuads += emitVulkanTiledQuad(builder, quad,
+                            layer.sprite().getU0(), layer.sprite().getU1(),
+                            layer.sprite().getV0(), layer.sprite().getV1(),
+                            layer.tinted(), layer.tintIndex(), world, baseX, baseY, baseZ, work, false);
+                }
+                TextureAtlasSprite emissive = GreedyEmissiveSupport.find(layer.sprite());
+                if (emissive != null) {
+                    emittedQuads += emitVulkanTiledQuad(builder, quad,
+                            emissive.getU0(), emissive.getU1(), emissive.getV0(), emissive.getV1(),
+                            false, -1, world, baseX, baseY, baseZ, work, true);
+                }
                 vanillaEquivalent += blockFaces;
             }
             if (captureDebug) {
@@ -601,13 +616,83 @@ public abstract class VulkanBuildTaskMixin {
     @Unique
     private static final int GREEDY_MESHING$LIGHT_STEP = 4;
 
+    /** Emits one ordinary Vulkan terrain quad per block tile, preserving arbitrary sprite UVs. */
+    @Unique
+    private static int emitVulkanTiledQuad(
+            TerrainBuilder builder, GreedyMesher.GreedyQuad quad,
+            float u0, float u1, float v0, float v1,
+            boolean applyTint, int tintIndex, BlockAndTintGetter world,
+            int baseX, int baseY, int baseZ,
+            GreedyVulkanWorkState work, boolean fullbright
+    ) {
+        TerrainBufferBuilder consumer = builder.getBufferBuilder(QuadFacing.UNDEFINED.ordinal());
+        float[] c = work.scratchCorners;
+        float top = greedyMeshing$waterSurfaceTop(world, quad, baseX, baseY, baseZ, work.scratchTintPos);
+        fillCorners(c, quad, top);
+        boolean flipV = quad.face().getAxis().isHorizontal();
+        float tv0 = flipV ? v1 : v0, tv1 = flipV ? v0 : v1;
+        BlockColors colors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
+        int count = 0;
+        for (int tv = 0; tv < quad.height(); tv++) {
+            for (int tu = 0; tu < quad.width(); tu++) {
+                float fu0 = (float) tu / quad.width(), fu1 = (float) (tu + 1) / quad.width();
+                float fv0 = (float) tv / quad.height(), fv1 = (float) (tv + 1) / quad.height();
+                float x00 = interpolate(c, fu0, fv0, 0), y00 = interpolate(c, fu0, fv0, 1), z00 = interpolate(c, fu0, fv0, 2);
+                float x10 = interpolate(c, fu1, fv0, 0), y10 = interpolate(c, fu1, fv0, 1), z10 = interpolate(c, fu1, fv0, 2);
+                float x11 = interpolate(c, fu1, fv1, 0), y11 = interpolate(c, fu1, fv1, 1), z11 = interpolate(c, fu1, fv1, 2);
+                float x01 = interpolate(c, fu0, fv1, 0), y01 = interpolate(c, fu0, fv1, 1), z01 = interpolate(c, fu0, fv1, 2);
+                int wx = baseX + (int) Math.floor(interpolate(c, fu0 + 0.001f, fv0 + 0.001f, 0));
+                int wy = baseY + (int) Math.floor(interpolate(c, fu0 + 0.001f, fv0 + 0.001f, 1));
+                int wz = baseZ + (int) Math.floor(interpolate(c, fu0 + 0.001f, fv0 + 0.001f, 2));
+                if (fullbright) {
+                    java.util.Arrays.fill(work.scratchLighting.brightness, 1.0f);
+                    java.util.Arrays.fill(work.scratchLighting.lightmap, 0xF000F0);
+                } else {
+                    GreedyLighting.computeTileLighting(world, quad.state(), quad.face(), wx, wy, wz, work.scratchLighting);
+                }
+                int tint = applyTint ? tintColorForTile(quad.state(), world, wx, wy, wz, work.scratchTintPos, colors, tintIndex) : 0xFFFFFF;
+                float tr = ((tint >> 16) & 0xFF) / 255.0f;
+                float tg = ((tint >> 8) & 0xFF) / 255.0f;
+                float tb = (tint & 0xFF) / 255.0f;
+                float[] px = {x00, x10, x11, x01}, py = {y00, y10, y11, y01}, pz = {z00, z10, z11, z01};
+                float[] pu = {u0, u1, u1, u0}, pv = {tv0, tv0, tv1, tv1};
+                if (fullbright) {
+                    for (int i = 0; i < 4; i++) {
+                        px[i] += quad.face().getStepX() * 0.001f;
+                        py[i] += quad.face().getStepY() * 0.001f;
+                        pz[i] += quad.face().getStepZ() * 0.001f;
+                    }
+                }
+                consumer.ensureCapacity();
+                for (int i = 0; i < 4; i++) {
+                    float br = work.scratchLighting.brightness[i];
+                    int argb = 0xFF000000
+                            | ((int) (br * tr * 255.0f) << 16)
+                            | ((int) (br * tg * 255.0f) << 8)
+                            | (int) (br * tb * 255.0f);
+                    consumer.vertex(px[i], py[i], pz[i], ColorUtil.ARGB.toRGBA(argb), pu[i], pv[i], work.scratchLighting.lightmap[i], 0);
+                }
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Unique
+    private static float interpolate(float[] c, float fu, float fv, int axis) {
+        float bottom = c[axis] + (c[3 + axis] - c[axis]) * fu;
+        float top = c[9 + axis] + (c[6 + axis] - c[9 + axis]) * fu;
+        return bottom + (top - bottom) * fv;
+    }
+
     @Unique
     private static int emitMergedQuad(
             TerrainBuilder builder, GreedyMesher.GreedyQuad quad,
             float u0, float u1, float v0, float v1,
             boolean applyTint, int tintIndex, BlockAndTintGetter world,
             int baseX, int baseY, int baseZ,
-            GreedyVulkanWorkState work
+            GreedyVulkanWorkState work,
+            int spriteSize
     ) {
         // Bucket choice mirrors VulkanMod's draw path, not its build path. The opaque draw reads:
         //   - back-face culling OFF -> ONLY the UNDEFINED bucket (facing index 6),
@@ -624,7 +709,7 @@ public abstract class VulkanBuildTaskMixin {
         int W = quad.width(), H = quad.height();
         if (W == 1 && H == 1) {
             emitVulkanSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
-                    applyTint, tintIndex, world, baseX, baseY, baseZ, work);
+                    applyTint, tintIndex, world, baseX, baseY, baseZ, work, spriteSize);
             return 1;
         }
         int count = 0;
@@ -633,7 +718,7 @@ public abstract class VulkanBuildTaskMixin {
             for (int su = 0; su < W; su += GREEDY_MESHING$LIGHT_STEP) {
                 int sw = Math.min(GREEDY_MESHING$LIGHT_STEP, W - su);
                 emitVulkanSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
-                        applyTint, tintIndex, world, baseX, baseY, baseZ, work);
+                        applyTint, tintIndex, world, baseX, baseY, baseZ, work, spriteSize);
                 count++;
             }
         }
@@ -647,7 +732,8 @@ public abstract class VulkanBuildTaskMixin {
             float u0, float u1, float v0, float v1,
             boolean applyTint, int tintIndex, BlockAndTintGetter world,
             int baseX, int baseY, int baseZ,
-            GreedyVulkanWorkState work
+            GreedyVulkanWorkState work,
+            int spriteSize
     ) {
         Direction face = quad.face();
         int qx = quad.x(), qy = quad.y(), qz = quad.z();
@@ -691,7 +777,7 @@ public abstract class VulkanBuildTaskMixin {
         // it as Color.a). VulkanMod's own bufferQuad iterates vertices in natural order, so no winding
         // flip. Colour is ARGB built here then converted with VulkanMod's own ColorUtil.ARGB.toRGBA,
         // exactly as bufferQuad does — passing raw ARGB swaps the R/B channels.
-        int aByte = (246 + face.ordinal()) << 24;
+        int aByte = (int) (GreedySpriteSupport.mergedFaceAlpha(face, spriteSize) * 255.0f) << 24;
         // Grow the buffer before writing — VulkanMod's own bufferQuad calls ensureCapacity() per quad.
         // Without it, appending past the capacity VulkanMod sized for its own geometry overflows into
         // adjacent section memory (=> other chunks duplicated/cut off at the wrong location).

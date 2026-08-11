@@ -288,7 +288,29 @@ public final class GreedySpriteSupport {
     //?}
 
     private static boolean isGreedyCompatible(TextureAtlasSprite sprite) {
-        return sprite.contents().width() == 16 && sprite.contents().height() == 16;
+        // The merged shader reconstructs UVs at 16x16 texel granularity, but the tiled
+        // fallback can preserve any square sprite size (including Faithful 64x). Animated
+        // sprites expose their frame dimensions through SpriteContents, so they remain safe
+        // when each frame is square even if the source PNG contains multiple frames.
+        return sprite.contents().width() > 0
+                && sprite.contents().height() > 0
+                && sprite.contents().width() == sprite.contents().height();
+    }
+
+    /** True when the custom merged shader can reconstruct this sprite's UVs exactly. */
+    public static boolean supportsMergedShaderSprite(TextureAtlasSprite sprite) {
+        int size = sprite.contents().width();
+        return (size == 16 || size == 32 || size == 64) && sprite.contents().height() == size;
+    }
+
+    /** Encodes face plus sprite scale in vertex alpha for the greedy terrain shader. */
+    public static float mergedFaceAlpha(Direction face, int spriteSize) {
+        int base = switch (spriteSize) {
+            case 32 -> 240;
+            case 64 -> 234;
+            default -> 246;
+        };
+        return (base + face.ordinal()) / 255.0f;
     }
 
     /** Every one of the six faces must be present and be a plain full-face quad. */
