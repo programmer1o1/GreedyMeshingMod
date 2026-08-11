@@ -42,7 +42,20 @@ void main() {
         }
 
         vec2 uv = spriteOrigin + local * spriteSize;
-        color = texture(Sampler0, uv) * vertexColor * ColorModulator;
+        // Use smooth block-position gradients instead of implicit derivatives of the fract()-based
+        // UV. The latter spikes at block boundaries and can make distant patterned textures flicker.
+        vec2 dPdx, dPdy;
+        if (face <= 1) {
+            dPdx = dFdx(blockPos.xz) * spriteSize;
+            dPdy = dFdy(blockPos.xz) * spriteSize;
+        } else if (face <= 3) {
+            dPdx = dFdx(blockPos.xy) * spriteSize;
+            dPdy = dFdy(blockPos.xy) * spriteSize;
+        } else {
+            dPdx = dFdx(blockPos.zy) * spriteSize;
+            dPdy = dFdy(blockPos.zy) * spriteSize;
+        }
+        color = textureGrad(Sampler0, uv, dPdx, dPdy) * vertexColor * ColorModulator;
 #ifdef ALPHA_CUTOUT
         // Keep texture alpha for cutout
 #else

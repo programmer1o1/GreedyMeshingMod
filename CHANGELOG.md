@@ -5,6 +5,16 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.3]
+
+### Fixed
+- **Distant ore flicker**: greedy terrain UV sampling now uses stable block-position gradients
+  across 1.21.x and 26.2 instead of derivatives from discontinuous `fract()` coordinates.
+- **Emissive ore depth fighting**: `_e` overlays now remain separated from their base faces at long
+  distance, preventing camera-movement flicker.
+- **1.21.1 Sodium build compatibility**: the release build now follows the primary stable Sodium
+  API pin without resolving incompatible legacy and new option APIs together.
+
 ## [0.5.2]
 
 ### Fixed

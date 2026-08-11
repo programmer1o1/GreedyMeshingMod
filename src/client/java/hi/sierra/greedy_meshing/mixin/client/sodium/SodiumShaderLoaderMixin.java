@@ -175,9 +175,36 @@ public abstract class SodiumShaderLoaderMixin {
                 + "        vec2 _gm_halfTexel = 0.5 / vec2(textureSize(" + samplerName + ", 0));\n"
                 + "        _gm_TexCoord = clamp(_gm_uv, _gm_spriteOrigin + _gm_halfTexel, _gm_spriteOrigin + _gm_spriteSize - _gm_halfTexel);\n"
                 + "    }\n"
+                + "    // Derive gradients from smooth block coordinates, not the fract() UV.\n"
+                + "    // The latter has a discontinuity at every block boundary and can make\n"
+                + "    // distant patterned textures choose unstable mip levels.\n"
+                + "    vec2 _gm_du = dFdx(v_TexCoord);\n"
+                + "    vec2 _gm_dv = dFdy(v_TexCoord);\n"
+                + "    vec2 _gm_texelScreenSize = sqrt(_gm_du * _gm_du + _gm_dv * _gm_dv);\n"
+                + "    if (_gm_isGreedy) {\n"
+                + "        int _gm_spritePixels = _gm_faceId >= 234 && _gm_faceId <= 239 ? 64 : (_gm_faceId >= 240 && _gm_faceId <= 245 ? 32 : 16);\n"
+                + "        vec2 _gm_spriteSize = float(_gm_spritePixels) / vec2(textureSize(" + samplerName + ", 0));\n"
+                + "        int _gm_face = _gm_faceId >= 234 && _gm_faceId <= 239 ? _gm_faceId - 234 : (_gm_faceId >= 240 && _gm_faceId <= 245 ? _gm_faceId - 240 : _gm_faceId - 246);\n"
+                + "        if (_gm_face <= 1) { _gm_du = dFdx(v_BlockPos.xz) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.xz) * _gm_spriteSize; }\n"
+                + "        else if (_gm_face <= 3) { _gm_du = dFdx(v_BlockPos.xy) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.xy) * _gm_spriteSize; }\n"
+                + "        else { _gm_du = dFdx(v_BlockPos.zy) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.zy) * _gm_spriteSize; }\n"
+                + "        _gm_texelScreenSize = sqrt(_gm_du * _gm_du + _gm_dv * _gm_dv);\n"
+                + "    }\n"
                 + "    // ---- End Greedy Meshing ----\n";
 
         source = source.replace("void main() {", "void main() {" + injection);
+
+        // Sodium's stock sampler computes derivatives from the interpolated texture coordinate.
+        // For greedy faces use the explicit smooth gradients above; retain Sodium's RGSS path
+        // for ordinary vanilla faces.
+        String stockSampling = "vec4 color = u_UseRGSS ? sampleRGSS(" + samplerName
+                + ", _gm_TexCoord, u_TexelSize) : sampleNearest(" + samplerName
+                + ", _gm_TexCoord, u_TexelSize);";
+        String stableSampling = "vec4 color = _gm_isGreedy ? sampleNearest(" + samplerName
+                + ", _gm_TexCoord, u_TexelSize, _gm_du, _gm_dv, _gm_texelScreenSize)"
+                + " : (u_UseRGSS ? sampleRGSS(" + samplerName + ", _gm_TexCoord, u_TexelSize)"
+                + " : sampleNearest(" + samplerName + ", _gm_TexCoord, u_TexelSize));";
+        source = source.replace(stockSampling, stableSampling);
 
         return source;
     }

@@ -658,9 +658,10 @@ public abstract class VulkanBuildTaskMixin {
                 float[] pu = {u0, u1, u1, u0}, pv = {tv0, tv0, tv1, tv1};
                 if (fullbright) {
                     for (int i = 0; i < 4; i++) {
-                        px[i] += quad.face().getStepX() * 0.001f;
-                        py[i] += quad.face().getStepY() * 0.001f;
-                        pz[i] += quad.face().getStepZ() * 0.001f;
+                        // Keep the emissive companion in front of the base face at long range.
+                        px[i] += quad.face().getStepX() * 0.05f;
+                        py[i] += quad.face().getStepY() * 0.05f;
+                        pz[i] += quad.face().getStepZ() * 0.05f;
                     }
                 }
                 consumer.ensureCapacity();

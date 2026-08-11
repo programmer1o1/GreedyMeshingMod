@@ -139,8 +139,11 @@ void main() {
         // high-resolution textures into a flat colour.  Let the sampler use the resource
         // pack's filtering for high-resolution sprites; the UV reconstruction above remains
         // exact and still repeats one complete sprite per block.
+        // Use the smooth block-position gradients for high-resolution sprites too.  The UV
+        // itself contains fract() at every block boundary, so implicit derivatives from uv can
+        // spike there and make distant mip selection flicker on patterned textures such as ores.
         color = (spritePixels > 16
-                ? texture(Sampler0, uv)
+                ? textureGrad(Sampler0, uv, dPdx, dPdy)
                 : sampleNearest(Sampler0, uv, pixelSize, dPdx, dPdy, texelScreenSize)) * vertexColor;
         // Restore full opacity for solid blocks (face alpha was only a flag).
         // But preserve texture alpha for cutout layers (grass overlay transparency).

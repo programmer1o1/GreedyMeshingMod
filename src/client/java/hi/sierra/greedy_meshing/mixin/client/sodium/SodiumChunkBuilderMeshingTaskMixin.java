@@ -897,10 +897,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                 float tintB = (tint & 0xFF) / 255.0f;
 
                 if (fullbright) {
-                    x00 += nx * 0.001f; y00 += ny * 0.001f; z00 += nz * 0.001f;
-                    x10 += nx * 0.001f; y10 += ny * 0.001f; z10 += nz * 0.001f;
-                    x11 += nx * 0.001f; y11 += ny * 0.001f; z11 += nz * 0.001f;
-                    x01 += nx * 0.001f; y01 += ny * 0.001f; z01 += nz * 0.001f;
+                    // Keep the emissive companion in front of the base face even at long range,
+                    // where a 0.001-block separation is below depth-buffer precision.
+                    x00 += nx * 0.05f; y00 += ny * 0.05f; z00 += nz * 0.05f;
+                    x10 += nx * 0.05f; y10 += ny * 0.05f; z10 += nz * 0.05f;
+                    x11 += nx * 0.05f; y11 += ny * 0.05f; z11 += nz * 0.05f;
+                    x01 += nx * 0.05f; y01 += ny * 0.05f; z01 += nz * 0.05f;
                 }
                 consumer.addVertex(x00, y00, z00)
                         .setColor(lighting.brightness[0] * tintR, lighting.brightness[0] * tintG, lighting.brightness[0] * tintB, 1.0f)

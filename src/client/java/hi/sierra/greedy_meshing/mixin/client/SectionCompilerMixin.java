@@ -811,9 +811,11 @@ public abstract class SectionCompilerMixin {
                         default -> { px = x01; py = y01; pz = z01; pu = u0; pv = tv1; }
                     }
                     if (fullbright) {
-                        px += nx * 0.001f;
-                        py += ny * 0.001f;
-                        pz += nz * 0.001f;
+                        // A larger separation prevents the emissive companion from depth-fighting
+                        // the base face when the ore is viewed at long distance.
+                        px += nx * 0.05f;
+                        py += ny * 0.05f;
+                        pz += nz * 0.05f;
                     }
                     consumer.addVertex(px, py, pz, packedColor, pu, pv, 0, lighting.lightmap[vi], nx, ny, nz);
                 }
