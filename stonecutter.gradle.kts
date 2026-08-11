@@ -7,11 +7,9 @@ plugins {
 stonecutter active "1.21.3" // [ACTIVE_VERSION]
 
 // Sodium's own API surface — not the Minecraft version — decides whether a build should target
-// the old SodiumOptionsGUI mixin, the new sodium:config_api_user entrypoint, or (on versions where
-// Sodium ships both a stable old-API line and a concurrent new-API beta line, e.g. 1.21.1) both at
-// once. Source of truth is that version's own gradle.properties: `deps.sodium` (primary, dev/runtime
-// pin) and the optional `deps.sodium_new_api` (a second, compile-only-only pin used just to expose
-// the new API's classes when the primary pin predates them — see that key's comment).
+// the old SodiumOptionsGUI mixin or the new sodium:config_api_user entrypoint. The source of truth
+// is the primary Sodium pin in that version's gradle.properties, since it is the API the build and
+// runtime are actually tested against.
 fun sodiumPinIsNewApi(pin: String?): Boolean {
     val m = pin?.let { Regex("-(\\d+)\\.(\\d+)\\.\\d+").find(it) } ?: return false
     return m.groupValues[1].toInt() == 0 && m.groupValues[2].toInt() >= 8
@@ -28,9 +26,8 @@ fun sodiumPin(project: String, key: String): String? {
 stonecutter parameters {
     constants.put("UNOBFUSCATED", node.metadata.project.startsWith("26."))
     constants.put("SODIUM", true)
-    // True if the new API's classes are available to compile against, from either pin.
-    constants.put("SODIUM_NEW_API", sodiumPinIsNewApi(sodiumPin(node.metadata.project, "deps.sodium"))
-        || sodiumPinIsNewApi(sodiumPin(node.metadata.project, "deps.sodium_new_api")))
+    // True if the primary Sodium pin exposes the new API.
+    constants.put("SODIUM_NEW_API", sodiumPinIsNewApi(sodiumPin(node.metadata.project, "deps.sodium")))
     // True if the old API's classes are available — only the primary pin ever provides these.
     constants.put("SODIUM_OLD_API", !sodiumPinIsNewApi(sodiumPin(node.metadata.project, "deps.sodium")))
     // VulkanMod is an optional, opt-in renderer backend. Keep this set in sync with the versions

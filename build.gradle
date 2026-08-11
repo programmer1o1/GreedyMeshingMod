@@ -168,23 +168,6 @@ dependencies {
             }
         }
 
-        // Sodium also runs a concurrent 0.8.x release branch on some older MC versions (see the
-        // deps.sodium_new_api comment in that version's gradle.properties). That branch dropped
-        // SodiumOptionsGUI in favour of the sodium:config_api_user entrypoint, so GreedySodiumConfigEntryPoint
-        // needs those API classes on the compile classpath too, without disturbing the deps.sodium
-        // pin above (which stays on the stable line for dev/runtime and for the old mixin).
-        // Addressed by Sodium's Modrinth project ID (AANobbMI) rather than its "sodium" slug: Loom
-        // derives a mod's remapped-artifact identity from the dependency coordinate, and two pins
-        // sharing the same "sodium" coordinate get the SAME derived identity regardless of which
-        // Gradle configuration declares them — Gradle's version conflict resolution then collapses
-        // them to whichever version is higher, silently dropping the other API surface entirely
-        // (verified: with both as "sodium", 0.6.13 lost to 0.8.12 and SodiumOptionsGUI vanished from
-        // the compile classpath). The differently-named coordinate keeps the two identities distinct.
-        def sodiumNewApiVersion = findProperty('deps.sodium_new_api')
-        if (sodiumNewApiVersion) {
-            modCompileOnly "maven.modrinth:AANobbMI:${sodiumNewApiVersion}"
-        }
-
         // VulkanMod: optional alternate renderer backend. Modrinth maven only.
         // NOTE: pin by the unique Modrinth version ID (not the version_number), because several
         // VulkanMod releases share a number (e.g. 0.5.3 exists for both 1.21-1.21.1 and 1.21.2-1.21.3)
