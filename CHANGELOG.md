@@ -5,6 +5,16 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.35]
+
+### Fixed
+- **Crash on 1.21.1 with Sodium's 0.8.x beta line** (issue #13): 0.5.3's build-conflict fix stopped
+  compiling the mod's Sodium options page against the new config API for 1.21.1, but still declared
+  it as Sodium's `sodium:config_api_user` entrypoint, crashing on launch for anyone on that branch.
+  The entrypoint declaration is now dropped for 1.21.1; Mod Menu / Cloth Config still expose the same
+  settings there. Full dual-API support (matching 0.5.1's behavior before the 0.5.3 regression) is
+  planned for a follow-up release.
+
 ## [0.5.3]
 
 ### Fixed
