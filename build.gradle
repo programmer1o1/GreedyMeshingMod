@@ -176,11 +176,12 @@ dependencies {
         }
 
         // Some Minecraft versions have concurrent Sodium release lines with incompatible config
-        // APIs. Keep the stable old API as the runtime/dev pin while exposing the new API under
-        // Sodium's project-id coordinate so Gradle does not collapse both artifacts by module name.
+        // APIs. Compile against Sodium's official API-only artifact: adding the entire newer mod
+        // here would put two versions of the legacy GUI implementation on the same classpath and
+        // make compilation depend on which duplicate class Gradle happens to select first.
         def sodiumNewApiVersion = findProperty('deps.sodium_new_api')
         if (sodiumNewApiVersion) {
-            modCompileOnly "maven.modrinth:AANobbMI:${sodiumNewApiVersion}"
+            modCompileOnly "net.caffeinemc:sodium-fabric-api:${sodiumNewApiVersion}"
         }
 
         // VulkanMod: optional alternate renderer backend. Modrinth maven only.

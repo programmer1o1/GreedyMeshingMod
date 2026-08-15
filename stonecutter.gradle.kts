@@ -10,7 +10,7 @@ stonecutter active "1.21.3" // [ACTIVE_VERSION]
 // the old SodiumOptionsGUI mixin, the new sodium:config_api_user entrypoint, or both when concurrent
 // release lines exist for one Minecraft version. The optional secondary pin is compile-only.
 fun sodiumPinIsNewApi(pin: String?): Boolean {
-    val m = pin?.let { Regex("-(\\d+)\\.(\\d+)\\.\\d+").find(it) } ?: return false
+    val m = pin?.let { Regex("(?:^|-)(\\d+)\\.(\\d+)\\.\\d+").find(it) } ?: return false
     return m.groupValues[1].toInt() == 0 && m.groupValues[2].toInt() >= 8
 }
 
