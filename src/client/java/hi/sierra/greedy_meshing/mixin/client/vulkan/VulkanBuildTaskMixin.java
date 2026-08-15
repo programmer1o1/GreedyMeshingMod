@@ -603,6 +603,10 @@ public abstract class VulkanBuildTaskMixin {
                 key |= (1 << i);
             }
         }
+        pos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
+        int packedLight = GreedyLighting.mergeLightKey(world, pos);
+        key |= ((packedLight >>> 4) & 0xF) << 8;
+        key |= ((packedLight >>> 20) & 0xF) << 12;
         return key;
     }
 
@@ -714,10 +718,11 @@ public abstract class VulkanBuildTaskMixin {
             return 1;
         }
         int count = 0;
-        for (int sv = 0; sv < H; sv += GREEDY_MESHING$LIGHT_STEP) {
-            int sh = Math.min(GREEDY_MESHING$LIGHT_STEP, H - sv);
-            for (int su = 0; su < W; su += GREEDY_MESHING$LIGHT_STEP) {
-                int sw = Math.min(GREEDY_MESHING$LIGHT_STEP, W - su);
+        int subdivision = GreedyRuntimeState.requiresCrackSafeSubdivision() ? 1 : GREEDY_MESHING$LIGHT_STEP;
+        for (int sv = 0; sv < H; sv += subdivision) {
+            int sh = Math.min(subdivision, H - sv);
+            for (int su = 0; su < W; su += subdivision) {
+                int sw = Math.min(subdivision, W - su);
                 emitVulkanSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
                         applyTint, tintIndex, world, baseX, baseY, baseZ, work, spriteSize);
                 count++;

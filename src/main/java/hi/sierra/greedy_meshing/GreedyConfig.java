@@ -61,6 +61,10 @@ public final class GreedyConfig {
         return data.mergeOrientedBlocks;
     }
 
+    public static boolean mobileGpuCrackFix() {
+        return data.mobileGpuCrackFix;
+    }
+
     public static boolean debugWireframe() {
         return data.debugWireframe;
     }
@@ -87,6 +91,7 @@ public final class GreedyConfig {
         copy.aggressiveGreedy = data.aggressiveGreedy;
         copy.greedyWater = data.greedyWater;
         copy.mergeOrientedBlocks = data.mergeOrientedBlocks;
+        copy.mobileGpuCrackFix = data.mobileGpuCrackFix;
         copy.debugWireframe = data.debugWireframe;
         copy.debugComparison = data.debugComparison;
         copy.debugTrianglesHud = data.debugTrianglesHud;
@@ -122,6 +127,10 @@ public final class GreedyConfig {
          *  the ones that are not would render with stretched or rotated textures when merged, so
          *  admission is gated on inspecting the actual model. Experimental, off by default. */
         public boolean mergeOrientedBlocks = false;
+        /** Use per-block visible-face subdivision on detected MobileGlues renderers to avoid
+         *  view-dependent raster cracks. Costs geometry reduction, so it can be disabled on
+         *  devices which do not exhibit the driver issue. */
+        public boolean mobileGpuCrackFix = true;
         public boolean debugWireframe = false;
         public boolean debugComparison = false;
         public boolean debugTrianglesHud = false;

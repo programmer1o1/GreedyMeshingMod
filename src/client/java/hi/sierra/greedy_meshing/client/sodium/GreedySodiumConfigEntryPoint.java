@@ -62,6 +62,14 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
                 .setStorageHandler(storage)
                 .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
 
+        general.addOption(builder.createBooleanOption(GreedySodiumIds.of("mobile_gpu_crack_fix"))
+                .setName(Component.literal("Mobile GPU Crack Fix"))
+                .setTooltip(Component.literal("On detected MobileGlues renderers, use crack-safe per-block visible faces. Prevents sky-colored holes but reduces geometry optimization; disable only if your device renders correctly without it."))
+                .setDefaultValue(true)
+                .setBinding(v -> draft[0].mobileGpuCrackFix = v, () -> draft[0].mobileGpuCrackFix)
+                .setStorageHandler(storage)
+                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
+
         page.addOptionGroup(general);
 
         // --- Debug options ---

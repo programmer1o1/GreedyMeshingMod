@@ -5,6 +5,28 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.4]
+
+### Fixed
+- **Full Sodium dual-API settings support on Minecraft 1.21.1**: the same jar once again includes
+  both the legacy Sodium 0.6.x options mixin and the `sodium:config_api_user` implementation used
+  by the concurrent Sodium 0.8.x beta line. The two API artifacts are kept under distinct compile
+  coordinates so Gradle cannot collapse them, restoring 0.5.1's integration without reintroducing
+  0.5.3's startup crash.
+- **View-dependent sky-colored holes on MobileGlues/Adreno terrain** (issue #14): affected mobile
+  renderers now use crack-safe per-block subdivision for visible merged faces, eliminating raster
+  gaps between differently sized greedy quads. This intentionally reduces the visible-geometry
+  optimization on MobileGlues and may increase chunk-build/render cost there compared with 0.5.35;
+  it is a correctness-first compatibility fallback enabled by the new **Mobile GPU Crack Fix**
+  option. Users whose device renders correctly can disable it to restore maximum geometry
+  reduction. Desktop and other renderers keep the normal four-block subdivision regardless.
+- **Greedy texture sampling at atlas and cutout boundaries**: reconstructed UVs are clamped inside
+  their sprite, face metadata no longer reduces texture alpha, and stable gradients are used across
+  the vanilla, Sodium, and VulkanMod shader paths.
+- **Over-dark merged faces near lighting boundaries**: default merging now includes block-light and
+  sky-light levels in its compatibility key, preventing a dark corner from being interpolated
+  across a brighter run. Aggressive Greedy retains its existing performance-first behavior.
+
 ## [0.5.35]
 
 ### Fixed

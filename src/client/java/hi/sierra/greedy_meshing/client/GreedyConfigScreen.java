@@ -73,6 +73,12 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.mergeOrientedBlocks = v)
                 .build());
 
+        general.addEntry(entries.startBooleanToggle(Component.literal("Mobile GPU Crack Fix"), draft.mobileGpuCrackFix)
+                .setDefaultValue(true)
+                .setTooltip(Component.literal("On detected MobileGlues renderers, subdivide visible merged faces per block to prevent view-dependent sky-colored holes. Disable only to recover maximum geometry reduction if your device renders correctly without it."))
+                .setSaveConsumer(v -> draft.mobileGpuCrackFix = v)
+                .build());
+
         // Greedy Water has no effect on these two backends (see GreedyEligibility.isGreedyWaterSource):
         // VulkanMod's per-quad translucency depth-sort visibly breaks when water is merged into large
         // quads (confirmed in-game), and 26.x isn't wired up yet (BlockRenderDispatcher's package and

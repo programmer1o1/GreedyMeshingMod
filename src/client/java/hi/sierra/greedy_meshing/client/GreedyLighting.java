@@ -350,6 +350,11 @@ public final class GreedyLighting {
         //?}
     }
 
+    /** Packed block/sky light at a face sample, using the version-correct light API. */
+    public static int mergeLightKey(BlockAndTintGetter world, BlockPos pos) {
+        return greedyMeshing$getLightColor(world, world.getBlockState(pos), pos);
+    }
+
     private static int blend(int a, int b, int c, int d) {
         if (a == 0) {
             a = d;

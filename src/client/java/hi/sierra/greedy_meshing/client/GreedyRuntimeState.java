@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import java.util.Locale;
 
 public final class GreedyRuntimeState {
+    private static final boolean CRACK_SAFE_SUBDIVISION = greedyMeshing$isMobileGlues();
     private static Method irisGetInstance;
     private static Method irisIsShaderPackInUse;
     private static boolean irisChecked;
@@ -20,6 +21,21 @@ public final class GreedyRuntimeState {
 
     public static boolean isRuntimeGreedyActive() {
         return GreedyConfig.enabled();
+    }
+
+    /** Uses matching per-block edges on MobileGlues to avoid view-dependent T-junction gaps. */
+    public static boolean requiresCrackSafeSubdivision() {
+        return GreedyConfig.mobileGpuCrackFix() && CRACK_SAFE_SUBDIVISION;
+    }
+
+    private static boolean greedyMeshing$isMobileGlues() {
+        String egl = System.getenv("POJAVEXEC_EGL");
+        String renderer = System.getenv("AMETHYST_RENDERER");
+        return greedyMeshing$containsMobileGlues(egl) || greedyMeshing$containsMobileGlues(renderer);
+    }
+
+    private static boolean greedyMeshing$containsMobileGlues(String value) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains("mobileglues");
     }
 
     public static boolean isShaderPackActive() {

@@ -71,6 +71,13 @@ public final class GreedySodiumOptionsPage {
                         .setControl(TickBoxControl::new)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
+                .add(OptionImpl.<GreedyConfig.Data, Boolean>createBuilder(Boolean.class, storage)
+                        .setName(Component.literal("Mobile GPU Crack Fix"))
+                        .setTooltip(Component.literal("On detected MobileGlues renderers, use crack-safe per-block visible faces. Prevents sky-colored holes but reduces geometry optimization; disable only if your device renders correctly without it."))
+                        .setBinding((d, v) -> d.mobileGpuCrackFix = v, d -> d.mobileGpuCrackFix)
+                        .setControl(TickBoxControl::new)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
                 .build();
 
         OptionGroup debug = OptionGroup.createBuilder()

@@ -169,12 +169,22 @@ public abstract class VulkanShaderMixin {
         // Route texture sampling through our re-tiled coord. The declaration (location 1) is untouched
         // because we only rewrite the body.
         body = body.replaceAll("(?<![a-zA-Z0-9_])texCoord0(?![a-zA-Z0-9_])", "_gm_TexCoord");
+        boolean hasVertexColor = source.contains("vertexColor");
+        if (hasVertexColor) {
+            body = body.replaceAll("(?<![a-zA-Z0-9_])vertexColor(?![a-zA-Z0-9_])", "_gm_VertexColor");
+        }
 
         String injection =
                 "\n    // ---- Greedy Meshing UV tiling ----\n"
                         + "    int _gm_faceId = int(round(v_GreedyFaceId));\n"
+                        + "    bool _gm_isGreedy = _gm_faceId >= 234 && _gm_faceId <= 251;\n"
+                        + (hasVertexColor
+                            ? "    vec4 _gm_VertexColor = vertexColor;\n    if (_gm_isGreedy) _gm_VertexColor.a = 1.0;\n"
+                            : "")
                         + "    vec2 _gm_TexCoord = texCoord0;\n"
-                        + "    if (_gm_faceId >= 234 && _gm_faceId <= 251) {\n"
+                        + "    vec2 _gm_du = dFdx(texCoord0);\n"
+                        + "    vec2 _gm_dv = dFdy(texCoord0);\n"
+                        + "    if (_gm_isGreedy) {\n"
                         + "        int _gm_spritePixels;\n"
                         + "        int _gm_face;\n"
                         + "        if (_gm_faceId >= 234 && _gm_faceId <= 239) { _gm_spritePixels = 64; _gm_face = _gm_faceId - 234; }\n"
@@ -192,10 +202,23 @@ public abstract class VulkanShaderMixin {
                         + "        vec2 _gm_uv = _gm_spriteOrigin + _gm_local * _gm_spriteSize;\n"
                         + "        vec2 _gm_halfTexel = 0.5 / vec2(textureSize(Sampler0, 0));\n"
                         + "        _gm_TexCoord = clamp(_gm_uv, _gm_spriteOrigin + _gm_halfTexel, _gm_spriteOrigin + _gm_spriteSize - _gm_halfTexel);\n"
+                        + "        if (_gm_face <= 1) { _gm_du = dFdx(v_BlockPos.xz) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.xz) * _gm_spriteSize; }\n"
+                        + "        else if (_gm_face <= 3) { _gm_du = dFdx(v_BlockPos.xy) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.xy) * _gm_spriteSize; }\n"
+                        + "        else { _gm_du = dFdx(v_BlockPos.zy) * _gm_spriteSize; _gm_dv = dFdy(v_BlockPos.zy) * _gm_spriteSize; }\n"
                         + "    }\n"
                         + "    // ---- End Greedy Meshing ----\n";
 
-        return header + injection + body;
+        String patched = header + injection + body;
+        patched = patched.replace(
+                "texture(Sampler0, _gm_TexCoord)",
+                "(_gm_isGreedy ? textureGrad(Sampler0, _gm_TexCoord, _gm_du, _gm_dv) : texture(Sampler0, _gm_TexCoord))"
+        );
+        String rgssSampling = "(UseRgss == 1 ? sampleRGSS(Sampler0, _gm_TexCoord, TexelSize) : sampleNearest(Sampler0, _gm_TexCoord, TexelSize))";
+        patched = patched.replace(
+                rgssSampling,
+                "(_gm_isGreedy ? textureGrad(Sampler0, _gm_TexCoord, _gm_du, _gm_dv) : " + rgssSampling + ")"
+        );
+        return patched;
     }
 }
 //?}

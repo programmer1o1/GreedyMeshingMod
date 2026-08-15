@@ -45,6 +45,8 @@ void main() {
         }
 
         vec2 uv = spriteOrigin + local * spriteSize;
+        vec2 halfTexel = 0.5 / vec2(atlasSize);
+        uv = clamp(uv, spriteOrigin + halfTexel, spriteOrigin + spriteSize - halfTexel);
         // Use smooth block-position gradients instead of implicit derivatives of the fract()-based
         // UV. The latter spikes at block boundaries and can make distant patterned textures flicker.
         vec2 dPdx, dPdy;
@@ -58,8 +60,9 @@ void main() {
             dPdx = dFdx(blockPos.zy) * spriteSize;
             dPdy = dFdy(blockPos.zy) * spriteSize;
         }
-        color = textureGrad(Sampler0, uv, dPdx, dPdy) * vertexColor * ColorModulator;
-        // Keep texture alpha for cutout discard
+        color = textureGrad(Sampler0, uv, dPdx, dPdy)
+                * vec4(vertexColor.rgb, 1.0) * ColorModulator;
+        // Keep texture alpha for cutout discard; vertex alpha is only the greedy marker.
     } else {
         color = texture(Sampler0, texCoord0) * vertexColor * ColorModulator;
     }

@@ -616,6 +616,14 @@ public abstract class SectionCompilerMixin {
                 key |= (1 << i);
             }
         }
+        // AO occupancy alone is insufficient: two otherwise identical faces can sit on
+        // opposite sides of a block/sky-light boundary. Keep the four-bit block and sky
+        // levels in disjoint key bits so a dark sample cannot be interpolated across a
+        // brighter merged run. Aggressive mode deliberately bypasses this whole key.
+        pos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
+        int packedLight = GreedyLighting.mergeLightKey(region, pos);
+        key |= ((packedLight >>> 4) & 0xF) << 8;
+        key |= ((packedLight >>> 20) & 0xF) << 12;
         return key;
     }
 
@@ -647,10 +655,11 @@ public abstract class SectionCompilerMixin {
 
         // Subdivide into LIGHT_STEP x LIGHT_STEP sub-quads for better lighting
         int count = 0;
-        for (int sv = 0; sv < H; sv += LIGHT_STEP) {
-            int sh = Math.min(LIGHT_STEP, H - sv);
-            for (int su = 0; su < W; su += LIGHT_STEP) {
-                int sw = Math.min(LIGHT_STEP, W - su);
+        int subdivision = GreedyRuntimeState.requiresCrackSafeSubdivision() ? 1 : LIGHT_STEP;
+        for (int sv = 0; sv < H; sv += subdivision) {
+            int sh = Math.min(subdivision, H - sv);
+            for (int su = 0; su < W; su += subdivision) {
+                int sw = Math.min(subdivision, W - su);
                 emitSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
                         applyTint, tintIndex, region, baseX, baseY, baseZ, work, false, spriteSize);
                 count++;

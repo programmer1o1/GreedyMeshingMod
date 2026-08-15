@@ -146,6 +146,12 @@ public abstract class SodiumShaderLoaderMixin {
         String body = source.substring(bodyStart + 1);
         // Use word-boundary-aware replacement to avoid partial matches
         body = body.replaceAll("(?<![a-zA-Z0-9_])v_TexCoord(?![a-zA-Z0-9_])", "_gm_TexCoord");
+        boolean hasVertexColor = source.contains("v_Color");
+        if (hasVertexColor) {
+            // Alpha contains our face marker, not opacity. Route only main's uses through a
+            // corrected copy so cutout discard still sees the texture's unmodified alpha.
+            body = body.replaceAll("(?<![a-zA-Z0-9_])v_Color(?![a-zA-Z0-9_])", "_gm_VertexColor");
+        }
         source = header + body;
 
         // 3. Insert greedy UV computation right after "void main() {"
@@ -155,6 +161,9 @@ public abstract class SodiumShaderLoaderMixin {
                 "\n    // ---- Greedy Meshing UV tiling ----\n"
                 + "    int _gm_faceId = int(round(v_GreedyFaceId));\n"
                 + "    bool _gm_isGreedy = _gm_faceId >= 234 && _gm_faceId <= 251;\n"
+                + (hasVertexColor
+                    ? "    vec4 _gm_VertexColor = v_Color;\n    if (_gm_isGreedy) _gm_VertexColor.a = 1.0;\n"
+                    : "")
                 + "    vec2 _gm_TexCoord = v_TexCoord;\n"
                 + "    if (_gm_isGreedy) {\n"
                 + "        int _gm_spritePixels;\n"
@@ -205,6 +214,14 @@ public abstract class SodiumShaderLoaderMixin {
                 + " : (u_UseRGSS ? sampleRGSS(" + samplerName + ", _gm_TexCoord, u_TexelSize)"
                 + " : sampleNearest(" + samplerName + ", _gm_TexCoord, u_TexelSize));";
         source = source.replace(stockSampling, stableSampling);
+
+        // Sodium 0.6.x uses a direct texture() call rather than the newer sampleNearest/RGSS
+        // expression above. Give greedy faces the same stable gradients on that path as well.
+        String legacySampling = "texture(" + samplerName + ", _gm_TexCoord, v_MaterialMipBias)";
+        String stableLegacySampling = "(_gm_isGreedy ? textureGrad(" + samplerName
+                + ", _gm_TexCoord, _gm_du, _gm_dv) : texture(" + samplerName
+                + ", _gm_TexCoord, v_MaterialMipBias))";
+        source = source.replace(legacySampling, stableLegacySampling);
 
         return source;
     }

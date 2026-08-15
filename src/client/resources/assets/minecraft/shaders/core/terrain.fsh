@@ -19,7 +19,9 @@ vec4 sampleNearest(sampler2D tex, vec2 uv, vec2 pixelSize, vec2 du, vec2 dv, vec
     vec2 uvTexelCoords = uv / pixelSize;
     vec2 texelCenter = round(uvTexelCoords) - 0.5f;
     vec2 texelOffset = uvTexelCoords - texelCenter;
-    texelOffset = (texelOffset - 0.5f) * pixelSize / texelScreenSize + 0.5f;
+    // A projected UV axis can become zero (or denormal-small) at particular camera
+    // angles. Avoid infinities/NaNs in the nearest-filter correction on mobile GLSL.
+    texelOffset = (texelOffset - 0.5f) * pixelSize / max(texelScreenSize, vec2(1.0e-8)) + 0.5f;
     texelOffset = clamp(texelOffset, 0.0f, 1.0f);
     uv = (texelCenter + texelOffset) * pixelSize;
     return textureGrad(tex, uv, du, dv);
@@ -119,6 +121,10 @@ void main() {
         }
 
         vec2 uv = spriteOrigin + local * spriteSize;
+        // Reversed axes intentionally produce local == 1.0 at integer block edges.
+        // Keep those samples inside this sprite rather than touching its atlas neighbour.
+        vec2 halfTexel = pixelSize * 0.5;
+        uv = clamp(uv, spriteOrigin + halfTexel, spriteOrigin + spriteSize - halfTexel);
 
         // Smooth derivatives from blockPos (no fract() discontinuities at block edges)
         vec2 dPdx, dPdy;
@@ -144,7 +150,10 @@ void main() {
         // spike there and make distant mip selection flicker on patterned textures such as ores.
         color = (spritePixels > 16
                 ? textureGrad(Sampler0, uv, dPdx, dPdy)
-                : sampleNearest(Sampler0, uv, pixelSize, dPdx, dPdy, texelScreenSize)) * vertexColor;
+                : sampleNearest(Sampler0, uv, pixelSize, dPdx, dPdy, texelScreenSize))
+                * vec4(vertexColor.rgb, 1.0);
+        // Vertex alpha carries the greedy face/sprite marker. It must never alter
+        // texture alpha, especially before the cutout threshold is evaluated.
         // Restore full opacity for solid blocks (face alpha was only a flag).
         // But preserve texture alpha for cutout layers (grass overlay transparency).
 #ifndef ALPHA_CUTOUT
