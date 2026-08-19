@@ -46,6 +46,7 @@ public final class GreedyResourceReloadListener implements SimpleSynchronousReso
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
+        GreedyCtmSupport.reload(manager);
         GreedyEligibility.clearCache();
         GreedySpriteSupport.clearCache();
         Minecraft mc = Minecraft.getInstance();

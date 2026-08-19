@@ -190,13 +190,16 @@ public final class GreedySpriteSupport {
     }
 
     private static boolean supportsModelSprites(BlockState state) {
+        if (GreedyCtmSupport.matchesBlock(state)) {
+            return false;
+        }
         //? if UNOBFUSCATED {
         BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
         RandomSource random = RandomSource.create(0L);
         List<BlockStateModelPart> parts = new ArrayList<>();
         model.collectParts(random, parts);
         for (Direction face : Direction.values()) {
-            if (!supportsFaceLayers(parts, face)) {
+            if (!supportsFaceLayers(state, parts, face)) {
                 return false;
             }
         }
@@ -207,7 +210,7 @@ public final class GreedySpriteSupport {
         List<BlockModelPart> parts = new ArrayList<>();
         model.collectParts(random, parts);
         for (Direction face : Direction.values()) {
-            if (!supportsFaceLayers(parts, face)) {
+            if (!supportsFaceLayers(state, parts, face)) {
                 return false;
             }
         }
@@ -225,19 +228,19 @@ public final class GreedySpriteSupport {
     }
 
     //? if UNOBFUSCATED {
-    private static boolean supportsFaceLayers(List<BlockStateModelPart> parts, Direction face) {
+    private static boolean supportsFaceLayers(BlockState state, List<BlockStateModelPart> parts, Direction face) {
         boolean found = false;
         for (BlockStateModelPart part : parts) {
             for (BakedQuad quad : part.getQuads(face)) {
                 found = true;
-                if (!isGreedyCompatible(quad.materialInfo().sprite())) {
+                if (!isGreedyCompatible(state, quad.materialInfo().sprite())) {
                     return false;
                 }
             }
             for (BakedQuad quad : part.getQuads(null)) {
                 if (quad.direction() == face) {
                     found = true;
-                    if (!isGreedyCompatible(quad.materialInfo().sprite())) {
+                    if (!isGreedyCompatible(state, quad.materialInfo().sprite())) {
                         return false;
                     }
                 }
@@ -246,19 +249,19 @@ public final class GreedySpriteSupport {
         return found;
     }
     //?} else if >=1.21.5 {
-    /*private static boolean supportsFaceLayers(List<BlockModelPart> parts, Direction face) {
+    /*private static boolean supportsFaceLayers(BlockState state, List<BlockModelPart> parts, Direction face) {
         boolean found = false;
         for (BlockModelPart part : parts) {
             for (BakedQuad quad : part.getQuads(face)) {
                 found = true;
-                if (!isGreedyCompatible(quad.sprite())) {
+                if (!isGreedyCompatible(state, quad.sprite())) {
                     return false;
                 }
             }
             for (BakedQuad quad : part.getQuads(null)) {
                 if (quad.direction() == face) {
                     found = true;
-                    if (!isGreedyCompatible(quad.sprite())) {
+                    if (!isGreedyCompatible(state, quad.sprite())) {
                         return false;
                     }
                 }
@@ -271,14 +274,14 @@ public final class GreedySpriteSupport {
         boolean found = false;
         for (BakedQuad quad : model.getQuads(state, face, random)) {
             found = true;
-            if (!isGreedyCompatible(quad.getSprite())) {
+            if (!isGreedyCompatible(state, quad.getSprite())) {
                 return false;
             }
         }
         for (BakedQuad quad : model.getQuads(state, null, random)) {
             if (quad.getDirection() == face) {
                 found = true;
-                if (!isGreedyCompatible(quad.getSprite())) {
+                if (!isGreedyCompatible(state, quad.getSprite())) {
                     return false;
                 }
             }
@@ -287,14 +290,15 @@ public final class GreedySpriteSupport {
     }
     //?}
 
-    private static boolean isGreedyCompatible(TextureAtlasSprite sprite) {
+    private static boolean isGreedyCompatible(BlockState state, TextureAtlasSprite sprite) {
         // The merged shader reconstructs UVs at 16x16 texel granularity, but the tiled
         // fallback can preserve any square sprite size (including Faithful 64x). Animated
         // sprites expose their frame dimensions through SpriteContents, so they remain safe
         // when each frame is square even if the source PNG contains multiple frames.
         return sprite.contents().width() > 0
                 && sprite.contents().height() > 0
-                && sprite.contents().width() == sprite.contents().height();
+                && sprite.contents().width() == sprite.contents().height()
+                && !GreedyCtmSupport.matchesTile(state, sprite);
     }
 
     /** True when the custom merged shader can reconstruct this sprite's UVs exactly. */

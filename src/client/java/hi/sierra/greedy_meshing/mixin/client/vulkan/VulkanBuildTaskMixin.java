@@ -713,17 +713,16 @@ public abstract class VulkanBuildTaskMixin {
 
         int W = quad.width(), H = quad.height();
         if (W == 1 && H == 1) {
-            emitVulkanSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
+            emitVulkanSubQuad(consumer, quad, 0, 0, 1, 1, W, H, u0, u1, v0, v1,
                     applyTint, tintIndex, world, baseX, baseY, baseZ, work, spriteSize);
             return 1;
         }
         int count = 0;
-        int subdivision = GreedyRuntimeState.requiresCrackSafeSubdivision() ? 1 : GREEDY_MESHING$LIGHT_STEP;
-        for (int sv = 0; sv < H; sv += subdivision) {
-            int sh = Math.min(subdivision, H - sv);
-            for (int su = 0; su < W; su += subdivision) {
-                int sw = Math.min(subdivision, W - su);
-                emitVulkanSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
+        for (int sv = 0; sv < H; sv += GREEDY_MESHING$LIGHT_STEP) {
+            int sh = Math.min(GREEDY_MESHING$LIGHT_STEP, H - sv);
+            for (int su = 0; su < W; su += GREEDY_MESHING$LIGHT_STEP) {
+                int sw = Math.min(GREEDY_MESHING$LIGHT_STEP, W - su);
+                emitVulkanSubQuad(consumer, quad, su, sv, sw, sh, W, H, u0, u1, v0, v1,
                         applyTint, tintIndex, world, baseX, baseY, baseZ, work, spriteSize);
                 count++;
             }
@@ -731,10 +730,50 @@ public abstract class VulkanBuildTaskMixin {
         return count;
     }
 
+    /** World-space overlap nudged onto a merged quad's outer edge to hide sub-pixel raster
+     *  gaps ("T-junction cracks") some GPU drivers leave between it and neighboring quads that
+     *  were meshed independently. Small enough to be visually imperceptible. */
+    @Unique
+    private static final float GREEDY_MESHING$CRACK_SKIRT = 1f / 128f;
+
+    // (uSide, vSide) per corner index, matching the fillCorners winding below: +1 means the
+    // corner sits on that axis's max edge, -1 its min edge. Indexed by Direction.ordinal()
+    // (DOWN, UP, NORTH, SOUTH, WEST, EAST).
+    @Unique
+    private static final int[][] GREEDY_MESHING$CORNER_UV_SIDES = {
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // DOWN
+            { -1,  1,  1,  1,  1, -1, -1, -1 }, // UP
+            {  1, -1, -1, -1, -1,  1,  1,  1 }, // NORTH
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // SOUTH
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // WEST
+            {  1, -1, -1, -1, -1,  1,  1,  1 }, // EAST
+    };
+
+    @Unique
+    private static void greedyMeshing$skirtCorners(float[] c, Direction face, boolean atUMin, boolean atUMax, boolean atVMin, boolean atVMax) {
+        if (!atUMin && !atUMax && !atVMin && !atVMax) {
+            return;
+        }
+        int axisU = (face == Direction.WEST || face == Direction.EAST) ? 2 : 0;
+        int axisV = (face == Direction.DOWN || face == Direction.UP) ? 2 : 1;
+        int[] sides = GREEDY_MESHING$CORNER_UV_SIDES[face.ordinal()];
+        for (int i = 0; i < 4; i++) {
+            int uSide = sides[i * 2];
+            int vSide = sides[i * 2 + 1];
+            int ci = i * 3;
+            if ((uSide < 0 && atUMin) || (uSide > 0 && atUMax)) {
+                c[ci + axisU] += uSide * GREEDY_MESHING$CRACK_SKIRT;
+            }
+            if ((vSide < 0 && atVMin) || (vSide > 0 && atVMax)) {
+                c[ci + axisV] += vSide * GREEDY_MESHING$CRACK_SKIRT;
+            }
+        }
+    }
+
     @Unique
     private static void emitVulkanSubQuad(
             TerrainBufferBuilder consumer, GreedyMesher.GreedyQuad quad,
-            int offU, int offV, int subW, int subH,
+            int offU, int offV, int subW, int subH, int fullW, int fullH,
             float u0, float u1, float v0, float v1,
             boolean applyTint, int tintIndex, BlockAndTintGetter world,
             int baseX, int baseY, int baseZ,
@@ -756,6 +795,10 @@ public abstract class VulkanBuildTaskMixin {
         BlockPos.MutableBlockPos tintPos = work.scratchTintPos;
         float top = greedyMeshing$waterSurfaceTop(world, sub, baseX, baseY, baseZ, tintPos);
         fillCorners(c, sub, top);
+        boolean fullAO = offU == 0 && offV == 0 && subW == fullW && subH == fullH;
+        if (!fullAO && GreedyRuntimeState.requiresCrackSafeSubdivision()) {
+            greedyMeshing$skirtCorners(c, face, offU == 0, offU + subW == fullW, offV == 0, offV + subH == fullH);
+        }
 
         BlockColors blockColors = applyTint ? Minecraft.getInstance().getBlockColors() : null;
         GreedyLighting.Scratch lighting = work.scratchLighting;

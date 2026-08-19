@@ -61,8 +61,8 @@ public final class GreedyConfig {
         return data.mergeOrientedBlocks;
     }
 
-    public static boolean mobileGpuCrackFix() {
-        return data.mobileGpuCrackFix;
+    public static boolean gpuCrackFix() {
+        return data.gpuCrackFix;
     }
 
     public static boolean debugWireframe() {
@@ -85,13 +85,30 @@ public final class GreedyConfig {
         return data.meshOpacity;
     }
 
+    /** Short, human-readable summary of the non-default toggles currently in effect, for the F3 overlay. */
+    public static String activeSettingsSummary() {
+        StringBuilder sb = new StringBuilder();
+        if (data.aggressiveGreedy) append(sb, "Aggressive");
+        if (data.mergeOrientedBlocks) append(sb, "MergeOriented");
+        if (data.gpuCrackFix) append(sb, "CrackFix");
+        if (data.greedyWater) append(sb, "GreedyWater");
+        return sb.length() == 0 ? "(defaults)" : sb.toString();
+    }
+
+    private static void append(StringBuilder sb, String flag) {
+        if (sb.length() > 0) {
+            sb.append(", ");
+        }
+        sb.append(flag);
+    }
+
     public static Data snapshot() {
         Data copy = new Data();
         copy.enabled = data.enabled;
         copy.aggressiveGreedy = data.aggressiveGreedy;
         copy.greedyWater = data.greedyWater;
         copy.mergeOrientedBlocks = data.mergeOrientedBlocks;
-        copy.mobileGpuCrackFix = data.mobileGpuCrackFix;
+        copy.gpuCrackFix = data.gpuCrackFix;
         copy.debugWireframe = data.debugWireframe;
         copy.debugComparison = data.debugComparison;
         copy.debugTrianglesHud = data.debugTrianglesHud;
@@ -127,10 +144,10 @@ public final class GreedyConfig {
          *  the ones that are not would render with stretched or rotated textures when merged, so
          *  admission is gated on inspecting the actual model. Experimental, off by default. */
         public boolean mergeOrientedBlocks = false;
-        /** Use per-block visible-face subdivision on detected MobileGlues renderers to avoid
-         *  view-dependent raster cracks. Costs geometry reduction, so it can be disabled on
-         *  devices which do not exhibit the driver issue. */
-        public boolean mobileGpuCrackFix = true;
+        /** Nudges a merged quad's outer-boundary vertices outward by a small epsilon to avoid
+         *  view-dependent raster cracks ("T-junction gaps") seen on some mobile and desktop GPU
+         *  drivers (e.g. Apple M-series). Adds no geometry, so it's cheap enough to default on. */
+        public boolean gpuCrackFix = true;
         public boolean debugWireframe = false;
         public boolean debugComparison = false;
         public boolean debugTrianglesHud = false;

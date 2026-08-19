@@ -648,19 +648,18 @@ public abstract class SectionCompilerMixin {
 
         // Single-block: emit directly with full AO
         if (W == 1 && H == 1) {
-                emitSubQuad(consumer, quad, 0, 0, 1, 1, u0, u1, v0, v1,
+                emitSubQuad(consumer, quad, 0, 0, 1, 1, W, H, u0, u1, v0, v1,
                     applyTint, tintIndex, region, baseX, baseY, baseZ, work, true, spriteSize);
             return 1;
         }
 
         // Subdivide into LIGHT_STEP x LIGHT_STEP sub-quads for better lighting
         int count = 0;
-        int subdivision = GreedyRuntimeState.requiresCrackSafeSubdivision() ? 1 : LIGHT_STEP;
-        for (int sv = 0; sv < H; sv += subdivision) {
-            int sh = Math.min(subdivision, H - sv);
-            for (int su = 0; su < W; su += subdivision) {
-                int sw = Math.min(subdivision, W - su);
-                emitSubQuad(consumer, quad, su, sv, sw, sh, u0, u1, v0, v1,
+        for (int sv = 0; sv < H; sv += LIGHT_STEP) {
+            int sh = Math.min(LIGHT_STEP, H - sv);
+            for (int su = 0; su < W; su += LIGHT_STEP) {
+                int sw = Math.min(LIGHT_STEP, W - su);
+                emitSubQuad(consumer, quad, su, sv, sw, sh, W, H, u0, u1, v0, v1,
                         applyTint, tintIndex, region, baseX, baseY, baseZ, work, false, spriteSize);
                 count++;
             }
@@ -668,10 +667,16 @@ public abstract class SectionCompilerMixin {
         return count;
     }
 
+    /** World-space overlap nudged onto a merged quad's outer edge to hide sub-pixel raster
+     *  gaps ("T-junction cracks") some GPU drivers leave between it and neighboring quads that
+     *  were meshed independently. Small enough to be visually imperceptible. */
+    @Unique
+    private static final float CRACK_SKIRT = 1f / 128f;
+
     @Unique
     private static void emitSubQuad(
             VertexConsumer consumer, GreedyMesher.GreedyQuad quad,
-            int offU, int offV, int subW, int subH,
+            int offU, int offV, int subW, int subH, int fullW, int fullH,
             float u0, float u1, float v0, float v1,
             //? if >=1.21.6 {
             /*boolean applyTint, int tintIndex, RenderSectionRegion region,
@@ -701,6 +706,9 @@ public abstract class SectionCompilerMixin {
         float[] c = work.scratchCorners;
         float top = greedyMeshing$waterSurfaceTop(region, sub, baseX, baseY, baseZ, work.scratchTintPos);
         fillCorners(c, sub, top);
+        if (!fullAO && GreedyRuntimeState.requiresCrackSafeSubdivision()) {
+            skirtCorners(c, face, offU == 0, offU + subW == fullW, offV == 0, offV + subH == fullH);
+        }
         float faceAlpha = GreedySpriteSupport.mergedFaceAlpha(face, spriteSize);
         float nx = face.getStepX(), ny = face.getStepY(), nz = face.getStepZ();
 
@@ -928,6 +936,44 @@ public abstract class SectionCompilerMixin {
             case EAST -> { float x1 = x0 + 1, y1 = y0 + quad.height() - 1 + top, z1 = z0 + quad.width(); out[0]=x1; out[1]=y0; out[2]=z1; out[3]=x1; out[4]=y0; out[5]=z0; out[6]=x1; out[7]=y1; out[8]=z0; out[9]=x1; out[10]=y1; out[11]=z1; }
             case DOWN -> { float x1 = x0 + quad.width(), z1 = z0 + quad.height(); out[0]=x0; out[1]=y0; out[2]=z0; out[3]=x1; out[4]=y0; out[5]=z0; out[6]=x1; out[7]=y0; out[8]=z1; out[9]=x0; out[10]=y0; out[11]=z1; }
             case UP -> { float x1 = x0 + quad.width(), y1 = y0 + top, z1 = z0 + quad.height(); out[0]=x0; out[1]=y1; out[2]=z1; out[3]=x1; out[4]=y1; out[5]=z1; out[6]=x1; out[7]=y1; out[8]=z0; out[9]=x0; out[10]=y1; out[11]=z0; }
+        }
+    }
+
+    // (uSide, vSide) per corner index, matching the fillCorners winding above: +1 means the
+    // corner sits on that axis's max edge, -1 its min edge. Indexed by Direction.ordinal()
+    // (DOWN, UP, NORTH, SOUTH, WEST, EAST).
+    @Unique
+    private static final int[][] CORNER_UV_SIDES = {
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // DOWN
+            { -1,  1,  1,  1,  1, -1, -1, -1 }, // UP
+            {  1, -1, -1, -1, -1,  1,  1,  1 }, // NORTH
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // SOUTH
+            { -1, -1,  1, -1,  1,  1, -1,  1 }, // WEST
+            {  1, -1, -1, -1, -1,  1,  1,  1 }, // EAST
+    };
+
+    /** Nudges a merged quad's outer-boundary corners outward by {@link #CRACK_SKIRT} so it
+     *  slightly overlaps neighboring quads meshed independently, hiding raster gaps at the
+     *  shared edge without adding geometry. Only touches corners on the {@code quad}'s true
+     *  outer edge — internal lighting-subdivision cuts are left untouched. */
+    @Unique
+    private static void skirtCorners(float[] c, Direction face, boolean atUMin, boolean atUMax, boolean atVMin, boolean atVMax) {
+        if (!atUMin && !atUMax && !atVMin && !atVMax) {
+            return;
+        }
+        int axisU = (face == Direction.WEST || face == Direction.EAST) ? 2 : 0;
+        int axisV = (face == Direction.DOWN || face == Direction.UP) ? 2 : 1;
+        int[] sides = CORNER_UV_SIDES[face.ordinal()];
+        for (int i = 0; i < 4; i++) {
+            int uSide = sides[i * 2];
+            int vSide = sides[i * 2 + 1];
+            int ci = i * 3;
+            if ((uSide < 0 && atUMin) || (uSide > 0 && atUMax)) {
+                c[ci + axisU] += uSide * CRACK_SKIRT;
+            }
+            if ((vSide < 0 && atVMin) || (vSide > 0 && atVMax)) {
+                c[ci + axisV] += vSide * CRACK_SKIRT;
+            }
         }
     }
 

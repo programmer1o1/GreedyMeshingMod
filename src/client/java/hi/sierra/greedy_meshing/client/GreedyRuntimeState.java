@@ -1,5 +1,6 @@
 package hi.sierra.greedy_meshing.client;
 
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import hi.sierra.greedy_meshing.GreedyConfig;
 
@@ -7,7 +8,6 @@ import java.lang.reflect.Method;
 import java.util.Locale;
 
 public final class GreedyRuntimeState {
-    private static final boolean CRACK_SAFE_SUBDIVISION = greedyMeshing$isMobileGlues();
     private static Method irisGetInstance;
     private static Method irisIsShaderPackInUse;
     private static boolean irisChecked;
@@ -16,6 +16,10 @@ public final class GreedyRuntimeState {
     private static Method sableGetContaining;
     private static boolean sableChecked;
 
+    private static final String BACKEND_NAME = FabricLoader.getInstance().isModLoaded("vulkanmod") ? "VulkanMod"
+            : FabricLoader.getInstance().isModLoaded("sodium") ? "Sodium"
+            : "Vanilla";
+
     private GreedyRuntimeState() {
     }
 
@@ -23,19 +27,14 @@ public final class GreedyRuntimeState {
         return GreedyConfig.enabled();
     }
 
-    /** Uses matching per-block edges on MobileGlues to avoid view-dependent T-junction gaps. */
+    /** Which chunk-render backend our mixins are hooking into, for the F3 overlay. */
+    public static String backendName() {
+        return BACKEND_NAME;
+    }
+
+    /** Uses matching per-block edges to avoid view-dependent T-junction gaps (issue also seen on desktop GPUs). */
     public static boolean requiresCrackSafeSubdivision() {
-        return GreedyConfig.mobileGpuCrackFix() && CRACK_SAFE_SUBDIVISION;
-    }
-
-    private static boolean greedyMeshing$isMobileGlues() {
-        String egl = System.getenv("POJAVEXEC_EGL");
-        String renderer = System.getenv("AMETHYST_RENDERER");
-        return greedyMeshing$containsMobileGlues(egl) || greedyMeshing$containsMobileGlues(renderer);
-    }
-
-    private static boolean greedyMeshing$containsMobileGlues(String value) {
-        return value != null && value.toLowerCase(Locale.ROOT).contains("mobileglues");
+        return GreedyConfig.gpuCrackFix();
     }
 
     public static boolean isShaderPackActive() {

@@ -73,10 +73,10 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.mergeOrientedBlocks = v)
                 .build());
 
-        general.addEntry(entries.startBooleanToggle(Component.literal("Mobile GPU Crack Fix"), draft.mobileGpuCrackFix)
+        general.addEntry(entries.startBooleanToggle(Component.literal("GPU Crack Fix"), draft.gpuCrackFix)
                 .setDefaultValue(true)
-                .setTooltip(Component.literal("On detected MobileGlues renderers, subdivide visible merged faces per block to prevent view-dependent sky-colored holes. Disable only to recover maximum geometry reduction if your device renders correctly without it."))
-                .setSaveConsumer(v -> draft.mobileGpuCrackFix = v)
+                .setTooltip(Component.literal("Nudges merged faces' outer edges outward by a tiny amount to prevent view-dependent sky-colored holes, seen on some mobile and desktop GPU drivers (including Apple M-series). Adds no geometry, so it's cheap to leave on; disable only for debugging."))
+                .setSaveConsumer(v -> draft.gpuCrackFix = v)
                 .build());
 
         // Greedy Water has no effect on these two backends (see GreedyEligibility.isGreedyWaterSource):

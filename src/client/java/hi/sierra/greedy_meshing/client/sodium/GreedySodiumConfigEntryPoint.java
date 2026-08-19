@@ -8,6 +8,7 @@ import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
 import net.minecraft.network.chat.Component;
 import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
+import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 
 public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
     @Override
@@ -16,6 +17,11 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
 
         var storage = (net.caffeinemc.mods.sodium.api.config.StorageEventHandler) () -> {
             GreedyConfig.apply(draft[0]);
+            // GreedyConfig.apply() only clears GreedyEligibility's cache (same sourceset).
+            // GreedySpriteSupport's cache lives in the client sourceset and has to be dropped
+            // here too, or settings like mergeOrientedBlocks keep serving stale verdicts after
+            // Sodium's REQUIRES_RENDERER_RELOAD rebuild runs.
+            GreedySpriteSupport.clearCache();
             draft[0] = GreedyConfig.snapshot();
         };
 
@@ -62,11 +68,11 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
                 .setStorageHandler(storage)
                 .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
 
-        general.addOption(builder.createBooleanOption(GreedySodiumIds.of("mobile_gpu_crack_fix"))
-                .setName(Component.literal("Mobile GPU Crack Fix"))
-                .setTooltip(Component.literal("On detected MobileGlues renderers, use crack-safe per-block visible faces. Prevents sky-colored holes but reduces geometry optimization; disable only if your device renders correctly without it."))
+        general.addOption(builder.createBooleanOption(GreedySodiumIds.of("gpu_crack_fix"))
+                .setName(Component.literal("GPU Crack Fix"))
+                .setTooltip(Component.literal("Nudges merged faces' outer edges outward by a tiny amount to prevent view-dependent sky-colored holes, seen on some mobile and desktop GPU drivers (including Apple M-series). Adds no geometry, so it's cheap to leave on; disable only for debugging."))
                 .setDefaultValue(true)
-                .setBinding(v -> draft[0].mobileGpuCrackFix = v, () -> draft[0].mobileGpuCrackFix)
+                .setBinding(v -> draft[0].gpuCrackFix = v, () -> draft[0].gpuCrackFix)
                 .setStorageHandler(storage)
                 .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
 

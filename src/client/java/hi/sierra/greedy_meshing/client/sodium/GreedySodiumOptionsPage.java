@@ -13,6 +13,7 @@ import net.caffeinemc.mods.sodium.client.gui.options.storage.OptionStorage;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.chat.Component;
 import hi.sierra.greedy_meshing.GreedyConfig;
+import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 
 public final class GreedySodiumOptionsPage {
     private GreedySodiumOptionsPage() {
@@ -32,6 +33,11 @@ public final class GreedySodiumOptionsPage {
             public void save() {
                 if (data != null) {
                     GreedyConfig.apply(data);
+                    // GreedyConfig.apply() only clears GreedyEligibility's cache (same sourceset).
+                    // GreedySpriteSupport's cache lives in the client sourceset and has to be
+                    // dropped here too, or settings like mergeOrientedBlocks keep serving stale
+                    // verdicts after Sodium's REQUIRES_RENDERER_RELOAD rebuild runs.
+                    GreedySpriteSupport.clearCache();
                     data = null;
                 }
             }
@@ -72,9 +78,9 @@ public final class GreedySodiumOptionsPage {
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
                 .add(OptionImpl.<GreedyConfig.Data, Boolean>createBuilder(Boolean.class, storage)
-                        .setName(Component.literal("Mobile GPU Crack Fix"))
-                        .setTooltip(Component.literal("On detected MobileGlues renderers, use crack-safe per-block visible faces. Prevents sky-colored holes but reduces geometry optimization; disable only if your device renders correctly without it."))
-                        .setBinding((d, v) -> d.mobileGpuCrackFix = v, d -> d.mobileGpuCrackFix)
+                        .setName(Component.literal("GPU Crack Fix"))
+                        .setTooltip(Component.literal("Nudges merged faces' outer edges outward by a tiny amount to prevent view-dependent sky-colored holes, seen on some mobile and desktop GPU drivers (including Apple M-series). Adds no geometry, so it's cheap to leave on; disable only for debugging."))
+                        .setBinding((d, v) -> d.gpuCrackFix = v, d -> d.gpuCrackFix)
                         .setControl(TickBoxControl::new)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())

@@ -1,6 +1,7 @@
         package hi.sierra.greedy_meshing.mixin.client;
 
 import hi.sierra.greedy_meshing.GreedyConfig;
+import hi.sierra.greedy_meshing.client.GreedyCtmSupport;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
 //? if UNOBFUSCATED {
@@ -39,14 +40,22 @@ public abstract class DebugScreenOverlayMixin {
                 GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
                 boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
 
-                long vanillaQuads = stats.vanillaEquivalentQuads();
-                long greedyQuads = stats.emittedQuads();
-                long saved = vanillaQuads - greedyQuads;
+                // Live (currently loaded) counts, not lifetime totals — those only ever grow and
+                // barely move the percentage, making the overlay look stale after a setting change
+                // even though the actual loaded terrain already reflects it.
+                long vanillaQuads = stats.liveVanillaEquivalentQuads();
+                long greedyQuads = stats.liveEmittedQuads();
+                long saved = stats.liveSavedQuads();
                 float pct = vanillaQuads > 0 ? (saved * 100.0f / vanillaQuads) : 0;
 
                 Identifier groupId = Identifier.fromNamespaceAndPath("greedy_meshing", "stats_group");
                 java.util.List<String> lines = new java.util.ArrayList<>();
-                lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive"));
+                lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive: " + GreedyRuntimeState.inactiveReason()));
+                lines.add("Backend: " + GreedyRuntimeState.backendName()
+                        + "  Settings: " + GreedyConfig.activeSettingsSummary());
+                if (GreedyCtmSupport.excludedCount() > 0) {
+                    lines.add("CTM-excluded: " + GreedyCtmSupport.excludedCount() + " blocks");
+                }
                 lines.add(String.format("Quads: %s -> %s (-%s, %.1f%%)",
                         fmt(vanillaQuads), fmt(greedyQuads), fmt(saved), pct));
                 lines.add(String.format("Sections: %d  Blocks: %s",
@@ -100,14 +109,19 @@ public abstract class DebugScreenOverlayMixin {
                 GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
                 boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
 
-                long vanillaQuads = stats.vanillaEquivalentQuads();
-                long greedyQuads = stats.emittedQuads();
-                long saved = vanillaQuads - greedyQuads;
+                long vanillaQuads = stats.liveVanillaEquivalentQuads();
+                long greedyQuads = stats.liveEmittedQuads();
+                long saved = stats.liveSavedQuads();
                 float pct = vanillaQuads > 0 ? (saved * 100.0f / vanillaQuads) : 0;
 
                 ResourceLocation groupId = ResourceLocation.fromNamespaceAndPath("greedy_meshing", "stats_group");
                 java.util.List<String> lines = new java.util.ArrayList<>();
-                lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive"));
+                lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive: " + GreedyRuntimeState.inactiveReason()));
+                lines.add("Backend: " + GreedyRuntimeState.backendName()
+                        + "  Settings: " + GreedyConfig.activeSettingsSummary());
+                if (GreedyCtmSupport.excludedCount() > 0) {
+                    lines.add("CTM-excluded: " + GreedyCtmSupport.excludedCount() + " blocks");
+                }
                 lines.add(String.format("Quads: %s -> %s (-%s, %.1f%%)",
                         fmt(vanillaQuads), fmt(greedyQuads), fmt(saved), pct));
                 lines.add(String.format("Sections: %d  Blocks: %s",
@@ -164,13 +178,18 @@ public abstract class DebugScreenOverlayMixin {
         GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
         boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
 
-        long vanillaQuads = stats.vanillaEquivalentQuads();
-        long greedyQuads = stats.emittedQuads();
-        long saved = vanillaQuads - greedyQuads;
+        long vanillaQuads = stats.liveVanillaEquivalentQuads();
+        long greedyQuads = stats.liveEmittedQuads();
+        long saved = stats.liveSavedQuads();
         float pct = vanillaQuads > 0 ? (saved * 100.0f / vanillaQuads) : 0;
 
         lines.add("");
         lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive: " + GreedyRuntimeState.inactiveReason()));
+        lines.add("Backend: " + GreedyRuntimeState.backendName()
+                + "  Settings: " + GreedyConfig.activeSettingsSummary());
+        if (GreedyCtmSupport.excludedCount() > 0) {
+            lines.add("CTM-excluded: " + GreedyCtmSupport.excludedCount() + " blocks");
+        }
         lines.add(String.format("Quads: %s -> %s (-%s, %.1f%%)",
                 greedyMeshing$fmt(vanillaQuads), greedyMeshing$fmt(greedyQuads), greedyMeshing$fmt(saved), pct));
         lines.add(String.format("Sections: %d  Blocks: %s",
@@ -210,13 +229,18 @@ public abstract class DebugScreenOverlayMixin {
         GreedyPerformanceStats.Snapshot stats = GreedyPerformanceStats.snapshot();
         boolean active = GreedyRuntimeState.isRuntimeGreedyActive();
 
-        long vanillaQuads = stats.vanillaEquivalentQuads();
-        long greedyQuads = stats.emittedQuads();
-        long saved = vanillaQuads - greedyQuads;
+        long vanillaQuads = stats.liveVanillaEquivalentQuads();
+        long greedyQuads = stats.liveEmittedQuads();
+        long saved = stats.liveSavedQuads();
         float pct = vanillaQuads > 0 ? (saved * 100.0f / vanillaQuads) : 0;
 
         lines.add("");
         lines.add("[Greedy Meshing] " + (active ? "Active" : "Inactive: " + GreedyRuntimeState.inactiveReason()));
+        lines.add("Backend: " + GreedyRuntimeState.backendName()
+                + "  Settings: " + GreedyConfig.activeSettingsSummary());
+        if (GreedyCtmSupport.excludedCount() > 0) {
+            lines.add("CTM-excluded: " + GreedyCtmSupport.excludedCount() + " blocks");
+        }
         lines.add(String.format("Quads: %s -> %s (-%s, %.1f%%)",
                 greedyMeshing$fmt(vanillaQuads), greedyMeshing$fmt(greedyQuads), greedyMeshing$fmt(saved), pct));
         lines.add(String.format("Sections: %d  Blocks: %s",
