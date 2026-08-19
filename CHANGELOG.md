@@ -5,6 +5,32 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.5]
+
+### Changed
+- **GPU Crack Fix now costs effectively no geometry**: rather than forcing a merged quad's visible
+  faces all the way down to per-block subdivision, it now nudges just the quad's outer-boundary
+  vertices outward by a small epsilon, hiding the same view-dependent raster gap by slightly
+  overlapping neighboring geometry instead of adding triangles. Re-enabled by default (previously
+  turned off due to its geometry cost); also confirmed present on some desktop GPUs (e.g. Apple
+  M-series), not just mobile, so it's no longer gated to detected mobile renderers.
+
+### Fixed
+- **OptiFine-format connected/random textures (e.g. via Continuity) rendering incorrectly once
+  merged**: blocks referenced by a resource pack's `matchBlocks`/`matchTiles` CTM or random-texture
+  properties are now excluded from greedy merging, since their real texture is chosen per-position
+  from neighboring blocks and a single merged quad can't reproduce that. Detected by parsing the
+  pack's own properties files rather than a CTM mod's internal classes.
+- **Settings not visibly applying via Sodium's native options menu**: toggles like Merge Oriented
+  Blocks now correctly invalidate sprite-eligibility state when applied from Sodium's own settings
+  screen (both API generations), not just the standalone Mod Menu / Cloth Config screen.
+
+### Improved
+- **F3 debug overlay**: quad/vertex counts now reflect currently loaded terrain instead of
+  lifetime cumulative totals, so the numbers actually move after a setting change. Added lines for
+  active non-default settings, the detected renderer backend (Vanilla/Sodium/VulkanMod), and how
+  many blocks are currently excluded from merging due to connected/random textures.
+
 ## [0.5.4]
 
 ### Fixed
