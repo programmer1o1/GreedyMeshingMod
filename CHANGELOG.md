@@ -5,6 +5,15 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.6]
+
+### Fixed
+- **Debug wireframe/triangles persisting after breaking the last block in a chunk section**: when a
+  section becomes fully empty, the renderer skips recompiling it, so stale debug overlays were never
+  cleared. The debug store now prunes entries for all-air sections periodically. (fixes #16)
+- **Debug triangles not rendering when wireframe or comparison is also enabled**: triangles can now
+  be shown alongside wireframe and comparison overlays simultaneously. (fixes #17)
+
 ## [0.5.5]
 
 ### Changed

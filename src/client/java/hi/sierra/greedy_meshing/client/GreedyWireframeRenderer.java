@@ -97,7 +97,7 @@ public final class GreedyWireframeRenderer {
                         GreedyDebugDraw.grid(consumer, matrixPose, quad, ex, ey, ez, fx, fy, fz, w, h, fills, alpha, 1.0f, 0.3f, 0.3f);
                     }
                 }
-                if (drawTriangles && !drawWireframe && !drawComparison) {
+                if (drawTriangles) {
                     GreedyDebugDraw.triangles(consumer, matrixPose, quad, fills, alpha, 1.0f, 0.85f, 0.1f);
                 }
             }
@@ -206,7 +206,7 @@ public final class GreedyWireframeRenderer {
                     GreedyDebugDraw.grid(consumer, pose, quad, ex, ey, ez, fx, fy, fz, w, h, fills, alpha, 1.0f, 0.3f, 0.3f);
                 }
             }
-            if (drawTriangles && !drawWireframe && !drawComparison) {
+            if (drawTriangles) {
                 GreedyDebugDraw.triangles(consumer, pose, quad, fills, alpha, 1.0f, 0.85f, 0.1f);
             }
         }

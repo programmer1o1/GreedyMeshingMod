@@ -93,7 +93,22 @@ public final class GreedyMeshingClient implements ClientModInitializer {
 
         // One section of slack so a section right at the edge is not dropped and immediately re-added.
         int radius = mc.options.getEffectiveRenderDistance() + 1;
-        GreedyPerformanceStats.pruneBeyond(mc.player.getBlockX() >> 4, mc.player.getBlockZ() >> 4, radius);
+        int playerSectionX = mc.player.getBlockX() >> 4;
+        int playerSectionZ = mc.player.getBlockZ() >> 4;
+        GreedyPerformanceStats.pruneBeyond(playerSectionX, playerSectionZ, radius);
+
+        if (mc.level != null && GreedyDebugStore.countSections() > 0) {
+            GreedyDebugStore.removeSectionsIf(key -> {
+                int sx = net.minecraft.core.SectionPos.x(key);
+                int sy = net.minecraft.core.SectionPos.y(key);
+                int sz = net.minecraft.core.SectionPos.z(key);
+                if (Math.abs(sx - playerSectionX) > radius || Math.abs(sz - playerSectionZ) > radius) return true;
+                if (!mc.level.hasChunk(sx, sz)) return true;
+                int idx = mc.level.getSectionIndexFromSectionY(sy);
+                if (idx < 0 || idx >= mc.level.getSectionsCount()) return true;
+                return mc.level.getChunk(sx, sz).getSection(idx).hasOnlyAir();
+            });
+        }
 
         Object ambientOcclusion = readOptionValue(mc.options, "ambientOcclusion");
         Object gamma = readOptionValue(mc.options, "gamma");

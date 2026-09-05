@@ -89,6 +89,10 @@ public final class GreedyDebugStore {
                 .sum();
     }
 
+    public static void removeSectionsIf(java.util.function.Predicate<Long> shouldRemove) {
+        SECTION_QUADS.keySet().removeIf(shouldRemove);
+    }
+
     public static int countSectionsNear(int sectionX, int sectionY, int sectionZ, int radius) {
         if (SECTION_QUADS.isEmpty()) {
             return 0;
