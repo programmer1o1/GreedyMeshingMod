@@ -302,7 +302,7 @@ public abstract class SectionCompilerMixin {
                                 faceLayer.sprite().getU0(), faceLayer.sprite().getU1(),
                                 faceLayer.sprite().getV0(), faceLayer.sprite().getV1(),
                                 faceLayer.tinted(), faceLayer.tintIndex(), renderSectionRegion, baseX, baseY, baseZ,
-                                work, faceLayer.sprite().contents().width());
+                                work, faceLayer.sprite().contents().width(), work.visibleFaces()[quad.face().ordinal()]);
                     }
                     TextureAtlasSprite emissive = GreedyEmissiveSupport.find(faceLayer.sprite());
                     if (emissive != null) {
@@ -641,7 +641,8 @@ public abstract class SectionCompilerMixin {
             //?}
             int baseX, int baseY, int baseZ,
             GreedyVanillaWorkState work,
-            int spriteSize
+            int spriteSize,
+            BitSet visible
     ) {
         int W = quad.width();
         int H = quad.height();
@@ -649,9 +650,14 @@ public abstract class SectionCompilerMixin {
         // Single-block: emit directly with full AO
         if (W == 1 && H == 1) {
                 emitSubQuad(consumer, quad, 0, 0, 1, 1, W, H, u0, u1, v0, v1,
-                    applyTint, tintIndex, region, baseX, baseY, baseZ, work, true, spriteSize);
+                    applyTint, tintIndex, region, baseX, baseY, baseZ, work, true, spriteSize, 0);
             return 1;
         }
+
+        // Which of the quad's 4 outer edges actually border more visible same-direction geometry
+        // (a real T-junction with a separately-meshed quad) vs. a true silhouette/corner, computed
+        // once for the whole merged quad rather than per sub-quad.
+        int skirtMask = greedyMeshing$computeSkirtMask(visible, quad.face(), quad.x(), quad.y(), quad.z(), W, H);
 
         // Subdivide into LIGHT_STEP x LIGHT_STEP sub-quads for better lighting
         int count = 0;
@@ -660,11 +666,65 @@ public abstract class SectionCompilerMixin {
             for (int su = 0; su < W; su += LIGHT_STEP) {
                 int sw = Math.min(LIGHT_STEP, W - su);
                 emitSubQuad(consumer, quad, su, sv, sw, sh, W, H, u0, u1, v0, v1,
-                        applyTint, tintIndex, region, baseX, baseY, baseZ, work, false, spriteSize);
+                        applyTint, tintIndex, region, baseX, baseY, baseZ, work, false, spriteSize, skirtMask);
                 count++;
             }
         }
         return count;
+    }
+
+    /**
+     * Bitmask (1=uMin, 2=uMax, 4=vMin, 8=vMax) of which outer edges of a merged quad are safe to
+     * crack-skirt: either the true edge of the 16-block section (the original cross-section T-junction
+     * case this fix targets), or an edge that actually borders more visible same-direction geometry
+     * (a real seam between two separately-meshed quads). An edge with neither is a genuine silhouette
+     * — e.g. a block corner where a perpendicular face meets — and nudging it outward there pushes the
+     * quad past the true geometric boundary into that other face's space instead of closing a gap.
+     */
+    @Unique
+    private static int greedyMeshing$computeSkirtMask(BitSet visible, Direction face, int qx, int qy, int qz, int w, int h) {
+        int uStart, vStart;
+        switch (face) {
+            case NORTH, SOUTH -> { uStart = qx; vStart = qy; }
+            case WEST, EAST   -> { uStart = qz; vStart = qy; }
+            default           -> { uStart = qx; vStart = qz; } // DOWN, UP
+        }
+        int mask = 0;
+        if (uStart == 0 || greedyMeshing$edgeHasNeighbor(visible, face, qx, qy, qz, w, h, -1, 0)) mask |= 1;
+        if (uStart + w == GreedyMesher.SECTION_SIZE || greedyMeshing$edgeHasNeighbor(visible, face, qx, qy, qz, w, h, 1, 0)) mask |= 2;
+        if (vStart == 0 || greedyMeshing$edgeHasNeighbor(visible, face, qx, qy, qz, w, h, 0, -1)) mask |= 4;
+        if (vStart + h == GreedyMesher.SECTION_SIZE || greedyMeshing$edgeHasNeighbor(visible, face, qx, qy, qz, w, h, 0, 1)) mask |= 8;
+        return mask;
+    }
+
+    @Unique
+    private static boolean greedyMeshing$edgeHasNeighbor(BitSet visible, Direction face, int qx, int qy, int qz, int w, int h, int du, int dv) {
+        if (du != 0) {
+            int u = du < 0 ? -1 : w;
+            for (int v = 0; v < h; v++) {
+                if (greedyMeshing$cellVisible(visible, face, qx, qy, qz, u, v)) return true;
+            }
+        } else {
+            int v = dv < 0 ? -1 : h;
+            for (int u = 0; u < w; u++) {
+                if (greedyMeshing$cellVisible(visible, face, qx, qy, qz, u, v)) return true;
+            }
+        }
+        return false;
+    }
+
+    @Unique
+    private static boolean greedyMeshing$cellVisible(BitSet visible, Direction face, int qx, int qy, int qz, int u, int v) {
+        int x, y, z;
+        switch (face) {
+            case NORTH, SOUTH -> { x = qx + u; y = qy + v; z = qz; }
+            case WEST, EAST   -> { x = qx; y = qy + v; z = qz + u; }
+            default           -> { x = qx + u; y = qy; z = qz + v; } // DOWN, UP
+        }
+        if (x < 0 || x >= GreedyMesher.SECTION_SIZE || y < 0 || y >= GreedyMesher.SECTION_SIZE || z < 0 || z >= GreedyMesher.SECTION_SIZE) {
+            return false;
+        }
+        return visible.get(GreedyMesher.index(x, y, z));
     }
 
     /** World-space overlap nudged onto a merged quad's outer edge to hide sub-pixel raster
@@ -686,7 +746,8 @@ public abstract class SectionCompilerMixin {
             int baseX, int baseY, int baseZ,
             GreedyVanillaWorkState work,
             boolean fullAO,
-            int spriteSize
+            int spriteSize,
+            int skirtMask
     ) {
         // Build a temporary sub-quad with offset position and sub-dimensions
         Direction face = quad.face();
@@ -707,7 +768,11 @@ public abstract class SectionCompilerMixin {
         float top = greedyMeshing$waterSurfaceTop(region, sub, baseX, baseY, baseZ, work.scratchTintPos);
         fillCorners(c, sub, top);
         if (!fullAO && GreedyRuntimeState.requiresCrackSafeSubdivision()) {
-            skirtCorners(c, face, offU == 0, offU + subW == fullW, offV == 0, offV + subH == fullH);
+            skirtCorners(c, face,
+                    offU == 0 && (skirtMask & 1) != 0,
+                    offU + subW == fullW && (skirtMask & 2) != 0,
+                    offV == 0 && (skirtMask & 4) != 0,
+                    offV + subH == fullH && (skirtMask & 8) != 0);
         }
         float faceAlpha = GreedySpriteSupport.mergedFaceAlpha(face, spriteSize);
         float nx = face.getStepX(), ny = face.getStepY(), nz = face.getStepZ();

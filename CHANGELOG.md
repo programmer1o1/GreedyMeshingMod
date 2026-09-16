@@ -5,6 +5,15 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.7]
+
+### Fixed
+- **Doubled/offset block faces at merged-quad corners with Aggressive Greedy enabled**: GPU Crack
+  Fix's outer-edge nudge was being applied at genuine block-corner silhouette edges, not just at
+  seams between separately-meshed quads, pushing the face past its true boundary into the
+  perpendicular face's space. It now only nudges an edge that borders a real section boundary or
+  more visible same-direction geometry. (fixes #18)
+
 ## [0.5.6]
 
 ### Fixed
