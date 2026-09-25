@@ -11,8 +11,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 //? if UNOBFUSCATED {
 /*import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 *///?} else if <1.21.2 {
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-//?} else if >=1.21.11 {
+/*import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+*///?} else if >=1.21.11 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 *///?}
 
@@ -22,6 +22,7 @@ import net.minecraft.client.Minecraft;
 *///?} else {
 import net.minecraft.resources.ResourceLocation;
 //?}
+import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyMeshing;
 
 import java.lang.reflect.Method;
@@ -36,6 +37,10 @@ public final class GreedyMeshingClient implements ClientModInitializer {
     private static Object lastAmbientOcclusion;
     private static Object lastGamma;
     private static Object lastLevel;
+    // Player section column and min-merge distance the current merge zone was last built for.
+    private static int zonePlayerSectionX = Integer.MIN_VALUE;
+    private static int zonePlayerSectionZ;
+    private static int zoneMinDistance;
     private static int prunePendingTicks;
 
     @Override
@@ -43,8 +48,8 @@ public final class GreedyMeshingClient implements ClientModInitializer {
         //? if UNOBFUSCATED {
         /*LevelRenderEvents.AFTER_SOLID_FEATURES.register(GreedyWireframeRenderer::render);
         *///?} else if <1.21.2 {
-        WorldRenderEvents.AFTER_ENTITIES.register(GreedyWireframeRenderer::render);
-        //?} else if >=1.21.11 {
+        /*WorldRenderEvents.AFTER_ENTITIES.register(GreedyWireframeRenderer::render);
+        *///?} else if >=1.21.11 {
         /*WorldRenderEvents.AFTER_ENTITIES.register(GreedyWireframeRenderer::render);
         *///?}
         // Wireframe overlay paths: 1.21/1.21.1 -> WorldRenderEvents (old package); 1.21.2-1.21.10 ->
@@ -71,9 +76,72 @@ public final class GreedyMeshingClient implements ClientModInitializer {
             lastLevel = currentLevel;
             GreedyPerformanceStats.reset();
             GreedyDebugStore.clear();
+            zonePlayerSectionX = Integer.MIN_VALUE;
         }
 
+        greedyMeshing$refreshMergeZone(mc);
         greedyMeshing$pruneUnloadedSections(mc);
+    }
+
+    /**
+     * Min Merge Distance (issue #19) is decided per section at build time, so walking around would
+     * otherwise leave the per-block zone where the player was when each section was built. When the
+     * player enters a new chunk column, rebuild exactly the columns whose near/far status flipped:
+     * a one-chunk step touches only the zone's leading and trailing edges. Config changes already
+     * rebuild everything, so a distance change just re-anchors the zone.
+     */
+    private static void greedyMeshing$refreshMergeZone(Minecraft mc) {
+        if (mc.player == null || mc.level == null) {
+            zonePlayerSectionX = Integer.MIN_VALUE;
+            return;
+        }
+        int minDistance = GreedyConfig.enabled() ? GreedyConfig.minMeshDistance() : 0;
+        int playerX = mc.player.getBlockX() >> 4;
+        int playerZ = mc.player.getBlockZ() >> 4;
+        int oldX = zonePlayerSectionX;
+        int oldZ = zonePlayerSectionZ;
+        int oldMinDistance = zoneMinDistance;
+        zonePlayerSectionX = playerX;
+        zonePlayerSectionZ = playerZ;
+        zoneMinDistance = minDistance;
+        if (oldX == Integer.MIN_VALUE || minDistance <= 0 || minDistance != oldMinDistance
+                || (oldX == playerX && oldZ == playerZ)) {
+            return;
+        }
+
+        // Columns outside render distance aren't built; dirtying them would only alias onto
+        // whichever loaded section currently occupies that slot of the render grid.
+        int renderDistance = mc.options.getEffectiveRenderDistance();
+        int minSectionY = mc.level.getSectionYFromSectionIndex(0);
+        int maxSectionY = mc.level.getSectionYFromSectionIndex(mc.level.getSectionsCount() - 1);
+        // Only columns within minDistance of the old or new position can change state. Scan both
+        // squares, skipping the overlap on the second pass so no column is dirtied twice.
+        for (int pass = 0; pass < 2; pass++) {
+            int centerX = pass == 0 ? oldX : playerX;
+            int centerZ = pass == 0 ? oldZ : playerZ;
+            for (int x = centerX - minDistance; x <= centerX + minDistance; x++) {
+                for (int z = centerZ - minDistance; z <= centerZ + minDistance; z++) {
+                    if (pass == 1 && Math.max(Math.abs(x - oldX), Math.abs(z - oldZ)) <= minDistance) {
+                        continue;
+                    }
+                    boolean wasNear = Math.max(Math.abs(x - oldX), Math.abs(z - oldZ)) < minDistance;
+                    boolean isNear = Math.max(Math.abs(x - playerX), Math.abs(z - playerZ)) < minDistance;
+                    if (wasNear == isNear
+                            || Math.max(Math.abs(x - playerX), Math.abs(z - playerZ)) > renderDistance) {
+                        continue;
+                    }
+                    for (int y = minSectionY; y <= maxSectionY; y++) {
+                        // Sodium and VulkanMod both redirect this vanilla entry point to their own
+                        // rebuild scheduling, so one call covers every backend.
+                        //? if >=26.2 {
+                        /*mc.levelExtractor.setSectionDirty(x, y, z);
+                        *///?} else {
+                        mc.levelRenderer.setSectionDirty(x, y, z);
+                        //?}
+                    }
+                }
+            }
+        }
     }
 
     /**

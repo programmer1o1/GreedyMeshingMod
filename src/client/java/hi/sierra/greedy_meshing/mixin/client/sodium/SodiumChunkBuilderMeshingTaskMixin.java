@@ -19,8 +19,8 @@ import net.caffeinemc.mods.sodium.client.world.LevelSlice;
 // GreedyEligibility.isGreedyWaterSource) — the fabric-api fluid-rendering module's jar-in-jar
 // resolution differs there and hasn't been verified.
 //? if UNOBFUSCATED {
-/*
-*///?} else {
+
+//?} else {
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
 //?}
@@ -134,12 +134,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             BlockPos worldPos,
             BlockPos modelOffset
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
 
-        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
         work.blockRenderer(renderer);
         if (work.world() == null) {
             work.world(getWorldSlice(work.buildContext()));
@@ -184,12 +184,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             BlockPos worldPos,
             BlockPos modelOffset
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
 
-        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
         work.blockRenderer(renderer);
         if (work.world() == null) {
             work.world(getWorldSlice(work.buildContext()));
@@ -234,12 +234,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             BlockPos worldPos,
             BlockPos modelOffset
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
 
-        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
         work.blockRenderer(renderer);
         if (work.world() == null) {
             work.world(getWorldSlice(work.buildContext()));
@@ -321,12 +321,12 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             TranslucentGeometryCollector collector,
             ChunkBuildBuffers buffers
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.render(levelSlice, state, fluidState, worldPos, modelOffset, collector, buffers);
             return;
         }
 
-        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
         if (work.world() == null) {
             work.world(getWorldSlice(work.buildContext()));
         }
@@ -363,11 +363,11 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             CancellationToken cancellationToken,
             CallbackInfoReturnable<ChunkBuildOutput> cir
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             return;
         }
 
-        GreedySodiumWorkState work = GREEDY_MESHING$STATE.get();
         if (work.eligibleCount() <= 0 || work.sectionOrigin() == null || work.blockRenderer() == null) {
             return;
         }
@@ -734,6 +734,11 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         for (int i = 0; i < 8; i++) {
             pos.set(worldX + offsets[i][0], worldY + offsets[i][1], worldZ + offsets[i][2]);
             BlockState neighbor = world.getBlockState(pos);
+            //? if >=26.3 {
+            /*// 26.3 narrowed isViewBlocking to the camera near-plane check; vanilla and Sodium AO
+            // now test isLightPermeable(), which is the same solid-and-dampening predicate.
+            if (!neighbor.isLightPermeable()) {
+            *///?} else {
             if (neighbor.isViewBlocking(world, pos)
                     //? if UNOBFUSCATED {
                     /*&& neighbor.getLightDampening() != 0
@@ -743,6 +748,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                     /*&& neighbor.getLightBlock(world, pos) != 0
                     *///?}
             ) {
+            //?}
                 key |= (1 << i);
             }
         }

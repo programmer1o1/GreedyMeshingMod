@@ -130,6 +130,14 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.meshOpacity = v)
                 .build());
 
+        general.addEntry(entries.startIntField(Component.literal("Min Merge Distance (chunks)"), draft.minMeshDistance)
+                .setDefaultValue(0)
+                .setMin(0)
+                .setMax(32)
+                .setTooltip(Component.literal("Sections closer than this many chunks to the player render per-block instead of merged, avoiding merged-quad texture-rotation artifacts up close. 0 = always merge."))
+                .setSaveConsumer(v -> draft.minMeshDistance = v)
+                .build());
+
         return builder.build();
     }
 }

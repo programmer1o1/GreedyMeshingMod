@@ -19,6 +19,7 @@ stonecutter {
         vers("26.1.1", "26.1.1")
         vers("26.1.2", "26.1.2")
         vers("26.2", "26.2")
+        vers("26.3", "26.3")
     }
     create(rootProject)
 }

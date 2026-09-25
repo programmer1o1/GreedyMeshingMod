@@ -5,6 +5,21 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0]
+
+### Added
+- **Minecraft 26.3 support** (vanilla renderer and Sodium 0.9.2). 26.3 renamed Blaze3D to
+  renderpearl and compiles shaders through SPIR-V, so the terrain shader overrides were ported to
+  the new `#include` / explicit `layout(location)` format (including the new multidraw and OIT
+  variants), and the Sodium shader injection now gives its varyings explicit locations. Smooth
+  lighting follows vanilla's switch to `BlockState.isLightPermeable()` for AO occlusion. VulkanMod
+  has no 26.3 release yet.
+- **Min Merge Distance** (issue #19): sections within this many chunks of the player render
+  per-block instead of merged, hiding merged-quad texture-rotation artifacts up close while distant
+  terrain keeps the savings. The zone follows the player: crossing a chunk boundary rebuilds only
+  the sections whose near/far status changed. Available in the Cloth Config screen and in Sodium's
+  settings (both API generations). Off (0) by default; shown in the F3 settings summary when set.
+
 ## [0.5.7]
 
 ### Fixed

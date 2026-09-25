@@ -2,6 +2,7 @@ package hi.sierra.greedy_meshing.client;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import hi.sierra.greedy_meshing.GreedyConfig;
 
 import java.lang.reflect.Method;
@@ -25,6 +26,35 @@ public final class GreedyRuntimeState {
 
     public static boolean isRuntimeGreedyActive() {
         return GreedyConfig.enabled();
+    }
+
+    /** Null-origin overload for call sites that haven't resolved a section position yet — treated
+     *  as active so behavior matches the pre-distance-check default. */
+    public static boolean isRuntimeGreedyActive(BlockPos sectionOrigin) {
+        if (sectionOrigin == null) {
+            return isRuntimeGreedyActive();
+        }
+        return isRuntimeGreedyActive(sectionOrigin.getX() >> 4, sectionOrigin.getZ() >> 4);
+    }
+
+    /** True when greedy meshing should apply to the section at (sectionX, sectionZ) — i.e. it's
+     *  enabled and, if a minimum distance is configured, the section is far enough from the player
+     *  that merged-quad texture-rotation artifacts (issue #19) aren't visible up close. */
+    public static boolean isRuntimeGreedyActive(int sectionX, int sectionZ) {
+        if (!GreedyConfig.enabled()) {
+            return false;
+        }
+        int minDistance = GreedyConfig.minMeshDistance();
+        if (minDistance <= 0) {
+            return true;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return true;
+        }
+        int dx = sectionX - (mc.player.getBlockX() >> 4);
+        int dz = sectionZ - (mc.player.getBlockZ() >> 4);
+        return Math.max(Math.abs(dx), Math.abs(dz)) >= minDistance;
     }
 
     /** Which chunk-render backend our mixins are hooking into, for the F3 overlay. */

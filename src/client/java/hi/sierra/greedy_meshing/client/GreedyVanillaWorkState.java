@@ -17,6 +17,9 @@ public final class GreedyVanillaWorkState {
     private int baseX, baseY, baseZ;
     private int eligibleCount;
     private boolean initialized;
+    // Decided once per compile: the player can cross a chunk boundary mid-build, and re-evaluating
+    // the min-merge-distance check per call could suppress blocks for merging, then skip the emit.
+    private boolean greedyActive;
 
     // Pre-allocated scratch objects for emitGreedyQuad to avoid per-call allocation
     public final float[] scratchCorners = new float[12];
@@ -43,11 +46,13 @@ public final class GreedyVanillaWorkState {
         baseZ = sectionPos.minBlockZ();
         eligibleCount = 0;
         initialized = true;
+        greedyActive = GreedyRuntimeState.isRuntimeGreedyActive(sectionPos.x(), sectionPos.z());
         Arrays.fill(layerCacheKeys, 0L);
         Arrays.fill(layerCacheValues, null);
     }
 
     public boolean initialized() { return initialized; }
+    public boolean greedyActive() { return greedyActive; }
     public int baseX() { return baseX; }
     public int baseY() { return baseY; }
     public int baseZ() { return baseZ; }

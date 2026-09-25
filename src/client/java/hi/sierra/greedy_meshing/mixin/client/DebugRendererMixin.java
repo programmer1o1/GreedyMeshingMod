@@ -100,7 +100,7 @@ public class DebugRendererMixin {
     }
 }
 //?} else {
-import net.minecraft.client.renderer.debug.DebugRenderer;
+/*import net.minecraft.client.renderer.debug.DebugRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 
 // No-op mixin for versions that don't use the DebugRenderer overlay hook:
@@ -110,4 +110,4 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(DebugRenderer.class)
 public class DebugRendererMixin {
 }
-//?}
+*///?}

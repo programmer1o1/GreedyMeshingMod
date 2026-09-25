@@ -85,6 +85,13 @@ public final class GreedyConfig {
         return data.meshOpacity;
     }
 
+    /** Sections closer than this many chunks to the player render per-block instead of merged
+     *  (0 = always merge, the historical default). See issue #19: merging doesn't preserve
+     *  per-block texture rotation, which is only noticeable up close. */
+    public static int minMeshDistance() {
+        return data.minMeshDistance;
+    }
+
     /** Short, human-readable summary of the non-default toggles currently in effect, for the F3 overlay. */
     public static String activeSettingsSummary() {
         StringBuilder sb = new StringBuilder();
@@ -92,6 +99,7 @@ public final class GreedyConfig {
         if (data.mergeOrientedBlocks) append(sb, "MergeOriented");
         if (data.gpuCrackFix) append(sb, "CrackFix");
         if (data.greedyWater) append(sb, "GreedyWater");
+        if (data.minMeshDistance > 0) append(sb, "MinMerge " + data.minMeshDistance);
         return sb.length() == 0 ? "(defaults)" : sb.toString();
     }
 
@@ -114,6 +122,7 @@ public final class GreedyConfig {
         copy.debugTrianglesHud = data.debugTrianglesHud;
         copy.debugScreenOverlay = data.debugScreenOverlay;
         copy.meshOpacity = data.meshOpacity;
+        copy.minMeshDistance = data.minMeshDistance;
         return copy;
     }
 
@@ -153,11 +162,18 @@ public final class GreedyConfig {
         public boolean debugTrianglesHud = false;
         public boolean debugScreenOverlay = true;
         public float meshOpacity = 0.35f;
+        /** Chunk radius around the player exempt from merging (0 = always merge). */
+        public int minMeshDistance = 0;
         public void clamp() {
             if (meshOpacity < 0.0f) {
                 meshOpacity = 0.0f;
             } else if (meshOpacity > 1.0f) {
                 meshOpacity = 1.0f;
+            }
+            if (minMeshDistance < 0) {
+                minMeshDistance = 0;
+            } else if (minMeshDistance > 32) {
+                minMeshDistance = 32;
             }
         }
     }

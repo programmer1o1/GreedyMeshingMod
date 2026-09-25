@@ -1,7 +1,11 @@
 package hi.sierra.greedy_meshing.mixin.client.sodium;
 
 //? if SODIUM {
-//? if >=26.2 {
+//? if >=26.3 {
+/*import net.minecraft.client.renderer.ShaderManager;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
+import net.minecraft.resources.Identifier;
+*///?} else if >=26.2 {
 /*import net.minecraft.client.renderer.ShaderManager;
 import com.mojang.blaze3d.shaders.ShaderType;
 import net.minecraft.resources.Identifier;
@@ -27,7 +31,12 @@ import java.util.regex.Pattern;
 // gone — raw OpenGL access was removed) and builds a vanilla Blaze3D RenderPipeline instead, which
 // reads shader source through vanilla's own ShaderManager keyed on (Identifier, ShaderType). Sodium
 // registers ONE Identifier ("sodium:blocks/block_layer_opaque") for both stages, told apart by type.
+// 26.3 renamed Blaze3D to renderpearl and moved getShader onto the ShaderManager.Configs record.
+//? if >=26.3 {
+/^@Mixin(ShaderManager.Configs.class)
+^///?} else {
 @Mixin(ShaderManager.class)
+//?}
 public abstract class SodiumShaderLoaderMixin {
 
     @Inject(method = "getShader", at = @At("RETURN"), cancellable = true, remap = false)
@@ -90,6 +99,20 @@ public abstract class SodiumShaderLoaderMixin {
     }
     //?}
 
+    // Sodium 0.9.2+ (26.3) compiles through SPIR-V, which requires an explicit location on every
+    // varying; Sodium's own occupy 0-3. Fixed slots well clear of those keep the vertex and fragment
+    // declarations matched. Older GLSL-only shaders keep implicit, name-matched varyings.
+    @Unique
+    private static final int GREEDY_MESHING$FIRST_VARYING_LOCATION = 12;
+
+    @Unique
+    private static String greedyMeshing$varyingLayout(String source, int index) {
+        if (!source.contains("layout(location")) {
+            return "";
+        }
+        return "layout(location = " + (GREEDY_MESHING$FIRST_VARYING_LOCATION + index) + ") ";
+    }
+
     @Unique
     private static String greedyMeshing$injectVertexShader(String source) {
         // Skip injection if the shader already has greedy code
@@ -100,7 +123,8 @@ public abstract class SodiumShaderLoaderMixin {
         // Add varying declarations before void main()
         source = source.replace(
                 "void main() {",
-                "out vec3 v_BlockPos;\nout float v_GreedyFaceId;\n\nvoid main() {"
+                greedyMeshing$varyingLayout(source, 0) + "out vec3 v_BlockPos;\n"
+                        + greedyMeshing$varyingLayout(source, 1) + "out float v_GreedyFaceId;\n\nvoid main() {"
         );
 
         // Add assignments at the end of main()
@@ -134,7 +158,8 @@ public abstract class SodiumShaderLoaderMixin {
         // 1. Add varying declarations before void main()
         source = source.replace(
                 "void main() {",
-                "in vec3 v_BlockPos;\nin float v_GreedyFaceId;\n\nvoid main() {"
+                greedyMeshing$varyingLayout(source, 0) + "in vec3 v_BlockPos;\n"
+                        + greedyMeshing$varyingLayout(source, 1) + "in float v_GreedyFaceId;\n\nvoid main() {"
         );
 
         // 2. Replace v_TexCoord with _gm_TexCoord in main() body only

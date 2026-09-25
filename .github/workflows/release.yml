@@ -92,6 +92,7 @@ jobs:
             ["26.1.1"]="26.1.1"
             ["26.1.2"]="26.1.2"
             ["26.2"]="26.2"
+            ["26.3"]="26.3"
           )
 
           for ver in "${!MC_VERSIONS[@]}"; do
@@ -116,7 +117,7 @@ jobs:
                 \"game_versions\": [\"${mc_ver}\"],
                 \"version_type\": \"release\",
                 \"loaders\": [\"fabric\"],
-                \"featured\": $([ "$ver" = "26.2" ] && echo true || echo false),
+                \"featured\": $([ "$ver" = "26.3" ] && echo true || echo false),
                 \"environment\": \"client_only\",
                 \"changelog\": \"See the full changelog: https://github.com/programmer1o1/GreedyMeshingMod/releases/tag/v${VERSION}\",
                 \"project_id\": \"yOnoFrVo\",

@@ -84,6 +84,13 @@ public final class GreedySodiumOptionsPage {
                         .setControl(TickBoxControl::new)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
+                .add(OptionImpl.<GreedyConfig.Data, Integer>createBuilder(Integer.class, storage)
+                        .setName(Component.literal("Min Merge Distance"))
+                        .setTooltip(Component.literal("Sections closer than this many chunks to the player render per-block instead of merged, avoiding merged-quad texture-rotation artifacts up close. 0 = always merge."))
+                        .setBinding((d, v) -> d.minMeshDistance = v, d -> d.minMeshDistance)
+                        .setControl(opt -> new SliderControl(opt, 0, 32, 1, ControlValueFormatter.quantityOrDisabled("chunks", "Always merge")))
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
                 .build();
 
         OptionGroup debug = OptionGroup.createBuilder()

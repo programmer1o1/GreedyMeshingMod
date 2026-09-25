@@ -45,8 +45,8 @@ import net.minecraft.world.level.material.Fluids;
 // GreedyEligibility.isGreedyWaterSource) — the fabric-api fluid-rendering module's jar-in-jar
 // resolution differs there and hasn't been verified.
 //? if UNOBFUSCATED {
-/*
-*///?} else {
+
+//?} else {
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
 //?}
@@ -160,12 +160,12 @@ public abstract class VulkanBuildTaskMixin {
             BlockPos worldPos,
             Vector3f pos
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.renderBlock(state, worldPos, pos);
             return;
         }
 
-        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
         BlockAndTintGetter world = work.world();
         BlockPos origin = work.sectionOrigin();
         if (world == null || origin == null
@@ -207,8 +207,8 @@ public abstract class VulkanBuildTaskMixin {
     // capping water sub-quad size to preserve sort granularity) makes this viable — see the
     // VULKANMOD_PRESENT comment in GreedyEligibility.java for the full explanation.
     //? if UNOBFUSCATED {
-    /*
-    *///?} else {
+    
+    //?} else {
     @Redirect(
             method = "compile",
             at = @At(
@@ -222,12 +222,12 @@ public abstract class VulkanBuildTaskMixin {
             FluidState fluidState,
             BlockPos pos
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             renderer.renderLiquid(state, fluidState, pos);
             return;
         }
 
-        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
         BlockAndTintGetter world = work.world();
         BlockPos origin = work.sectionOrigin();
         if (world == null || origin == null || !GreedyEligibility.isGreedyWaterSource(state, world, pos)) {
@@ -268,11 +268,11 @@ public abstract class VulkanBuildTaskMixin {
             float camX, float camY, float camZ, BuilderResources builderResources,
             CallbackInfoReturnable<?> cir
     ) {
-        if (!GreedyRuntimeState.isRuntimeGreedyActive()) {
+        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
+        if (!work.greedyActive()) {
             return;
         }
 
-        GreedyVulkanWorkState work = GREEDY_MESHING$STATE.get();
         // endDrawing() is called once per TerrainRenderType inside compile()'s finalization loop, and
         // this @Inject fires on every one of those calls. Emit exactly once per compile, otherwise the
         // merged geometry is appended into the buffer ~5 times over (the duplicate-chunk artifact).

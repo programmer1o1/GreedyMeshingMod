@@ -8,15 +8,15 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 //? if UNOBFUSCATED {
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+/*import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import org.joml.Vector3fc;
-//?} else if >=1.21.5 {
-import net.minecraft.client.renderer.block.model.BlockModelPart;
+*///?} else if >=1.21.5 {
+/*import net.minecraft.client.renderer.block.model.BlockModelPart;
 import net.minecraft.client.renderer.block.model.BlockStateModel;
 import net.minecraft.client.renderer.block.model.BakedQuad;
-//?} else {
+*///?} else {
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.BakedModel;
 //?}
@@ -92,11 +92,11 @@ public final class GreedySpriteSupport {
     }
 
     //? if UNOBFUSCATED {
-    /**
+    /*/^*
      * 26.x's {@code BakedQuad} carries per-vertex data as {@code position(int)}/{@code packedUV(int)}
      * rather than the classic {@code int[] vertices()} blob the other branches read, so it has its
      * own extraction here; both funnel into the same {@link #checkVertex} logic.
-     */
+     ^/
     private static boolean isFullCubeFace(BakedQuad quad, Direction face, TextureAtlasSprite sprite) {
         int cornersSeen = 0;
         for (int v = 0; v < 4; v++) {
@@ -112,7 +112,7 @@ public final class GreedySpriteSupport {
         }
         return cornersSeen == 0b1111;
     }
-    //?} else if >=1.21.11 {
+    *///?} else if >=1.21.11 {
     /*
     // 1.21.11 already carries the position(int)/packedUV(int) shape 26.x has; only materialInfo()
     // vs. a direct sprite() accessor differs, which the caller (faceIsFullCube) supplies.
@@ -194,7 +194,7 @@ public final class GreedySpriteSupport {
             return false;
         }
         //? if UNOBFUSCATED {
-        BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+        /*BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
         RandomSource random = RandomSource.create(0L);
         List<BlockStateModelPart> parts = new ArrayList<>();
         model.collectParts(random, parts);
@@ -204,7 +204,7 @@ public final class GreedySpriteSupport {
             }
         }
         return true;
-        //?} else if >=1.21.5 {
+        *///?} else if >=1.21.5 {
         /*BlockStateModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
         RandomSource random = RandomSource.create(0L);
         List<BlockModelPart> parts = new ArrayList<>();
@@ -228,7 +228,7 @@ public final class GreedySpriteSupport {
     }
 
     //? if UNOBFUSCATED {
-    private static boolean supportsFaceLayers(BlockState state, List<BlockStateModelPart> parts, Direction face) {
+    /*private static boolean supportsFaceLayers(BlockState state, List<BlockStateModelPart> parts, Direction face) {
         boolean found = false;
         for (BlockStateModelPart part : parts) {
             for (BakedQuad quad : part.getQuads(face)) {
@@ -248,7 +248,7 @@ public final class GreedySpriteSupport {
         }
         return found;
     }
-    //?} else if >=1.21.5 {
+    *///?} else if >=1.21.5 {
     /*private static boolean supportsFaceLayers(BlockState state, List<BlockModelPart> parts, Direction face) {
         boolean found = false;
         for (BlockModelPart part : parts) {
@@ -320,7 +320,7 @@ public final class GreedySpriteSupport {
     /** Every one of the six faces must be present and be a plain full-face quad. */
     private static boolean hasStandardCubeGeometry(BlockState state) {
         //? if UNOBFUSCATED {
-        BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
+        /*BlockStateModel model = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(state);
         RandomSource random = RandomSource.create(0L);
         List<BlockStateModelPart> parts = new ArrayList<>();
         model.collectParts(random, parts);
@@ -330,7 +330,7 @@ public final class GreedySpriteSupport {
             }
         }
         return true;
-        //?} else if >=1.21.5 {
+        *///?} else if >=1.21.5 {
         /*BlockStateModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(state);
         RandomSource random = RandomSource.create(0L);
         List<BlockModelPart> parts = new ArrayList<>();
@@ -354,7 +354,7 @@ public final class GreedySpriteSupport {
     }
 
     //? if UNOBFUSCATED {
-    private static boolean faceIsFullCube(List<BlockStateModelPart> parts, Direction face) {
+    /*private static boolean faceIsFullCube(List<BlockStateModelPart> parts, Direction face) {
         boolean found = false;
         for (BlockStateModelPart part : parts) {
             for (BakedQuad quad : part.getQuads(face)) {
@@ -374,7 +374,7 @@ public final class GreedySpriteSupport {
         }
         return found;
     }
-    //?} else if >=1.21.11 {
+    *///?} else if >=1.21.11 {
     /*
     // 1.21.11 moved BakedQuad from a raw int[] vertex blob to position(int)/packedUV(int)
     // accessors, the same restructure the 26.x line has, but sprite() stays a direct accessor

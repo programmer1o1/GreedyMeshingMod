@@ -76,6 +76,16 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
                 .setStorageHandler(storage)
                 .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
 
+        general.addOption(builder.createIntegerOption(GreedySodiumIds.of("min_mesh_distance"))
+                .setName(Component.literal("Min Merge Distance"))
+                .setTooltip(Component.literal("Sections closer than this many chunks to the player render per-block instead of merged, avoiding merged-quad texture-rotation artifacts up close. 0 = always merge."))
+                .setDefaultValue(0)
+                .setRange(0, 32, 1)
+                .setValueFormatter(v -> Component.literal(v == 0 ? "Always merge" : v + " chunks"))
+                .setBinding(v -> draft[0].minMeshDistance = v, () -> draft[0].minMeshDistance)
+                .setStorageHandler(storage)
+                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
+
         page.addOptionGroup(general);
 
         // --- Debug options ---

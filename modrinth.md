@@ -21,7 +21,7 @@ A client-side Fabric optimization mod that merges identical adjacent block faces
 | Minecraft | Loader |
 |-----------|--------|
 | 1.21 - 1.21.11 | Fabric |
-| 26.1 - 26.2 | Fabric |
+| 26.1 - 26.3 | Fabric |
 
 ## Performance
 Performance gains vary depending on your hardware and world. If your GPU is already underutilized (high FPS), the improvement may be minimal. The mod benefits most on lower-end GPUs, higher render distances, and worlds with large flat surfaces of the same block type (e.g. superflat, underground caves, large builds).

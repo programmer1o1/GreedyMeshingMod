@@ -331,7 +331,9 @@ public final class GreedyLighting {
     private static boolean isOpen(BlockAndTintGetter world, BlockPos.MutableBlockPos pos, int x, int y, int z) {
         pos.set(x, y, z);
         BlockState state = world.getBlockState(pos);
-        //? if UNOBFUSCATED {
+        //? if >=26.3 {
+        /*return state.isLightPermeable();
+        *///?} else if UNOBFUSCATED {
         /*return !state.isViewBlocking(world, pos) || state.getLightDampening() == 0;
         *///?} else if >=1.21.2 {
         return !state.isViewBlocking(world, pos) || state.getLightBlock() == 0;

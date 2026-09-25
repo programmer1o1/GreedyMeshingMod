@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyMesher;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
+import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
 
 import java.util.Arrays;
 
@@ -28,6 +29,8 @@ public final class GreedyVulkanWorkState {
     private BuilderResources resources;
     private BlockAndTintGetter world;
     private BlockPos sectionOrigin;
+    // Decided once per build (see GreedyVanillaWorkState.greedyActive) so every hook agrees.
+    private boolean greedyActive;
     private long sectionKey = Long.MIN_VALUE;
     private int eligibleCount;
     private boolean captureDebug;
@@ -48,6 +51,7 @@ public final class GreedyVulkanWorkState {
         this.resources = resources;
         this.world = null;
         this.sectionOrigin = null;
+        this.greedyActive = GreedyRuntimeState.isRuntimeGreedyActive();
         this.sectionKey = Long.MIN_VALUE;
         this.eligibleCount = 0;
         this.emitted = false;
@@ -92,6 +96,11 @@ public final class GreedyVulkanWorkState {
 
     public void sectionOrigin(BlockPos sectionOrigin) {
         this.sectionOrigin = sectionOrigin;
+        this.greedyActive = GreedyRuntimeState.isRuntimeGreedyActive(sectionOrigin);
+    }
+
+    public boolean greedyActive() {
+        return greedyActive;
     }
 
     public long sectionKey() {

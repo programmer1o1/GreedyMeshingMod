@@ -30,7 +30,7 @@ Instead of rendering each block face as a separate quad, Greedy Meshing scans ea
 | Minecraft | Loader | Status |
 |-----------|--------|--------|
 | 1.21 - 1.21.11 | Fabric | Supported |
-| 26.1 - 26.2 | Fabric | Supported |
+| 26.1 - 26.3 | Fabric | Supported |
 | Any | NeoForge (via Sinytra Connector) | Not officially supported |
 
 Built with [Stonecutter](https://github.com/stonecutter-versioning/stonecutter) for multi-version support.
@@ -54,6 +54,7 @@ Open the config screen via Mod Menu, or edit `config/greedy_meshing.json`:
 
 - **Enabled** - Toggle greedy meshing on/off
 - **Aggressive Greedy (Absolute)** - Merge across ambient-occlusion boundaries for the largest possible quads (off by default)
+- **Min Merge Distance** - Render sections within this many chunks of the player per-block instead of merged (0 = always merge)
 - **Debug Wireframe** - Show merged quad outlines
 - **Debug Comparison** - Split-screen greedy vs vanilla view
 - **Mesh Opacity** - Wireframe overlay opacity

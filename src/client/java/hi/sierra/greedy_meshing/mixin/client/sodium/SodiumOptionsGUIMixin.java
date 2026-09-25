@@ -22,9 +22,9 @@ public abstract class SodiumOptionsGUIMixin {
         pages.add(GreedySodiumOptionsPage.create());
     }
 }
-//? } else {
-public class SodiumOptionsGUIMixin {
+//?} else {
+/*public class SodiumOptionsGUIMixin {
     // No-op when this version's Sodium pin is 0.8+: SodiumOptionsGUI doesn't exist there, config is
     // registered via the sodium:config_api_user entrypoint instead (see GreedySodiumConfigEntryPoint).
 }
-//?}
+*///?}

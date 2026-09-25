@@ -26,8 +26,8 @@ import net.minecraft.client.resources.model.BakedModel;
 // GreedyEligibility.isGreedyWaterSource) — BlockRenderDispatcher's package and the fabric-api
 // fluid-rendering module's jar-in-jar resolution both differ there and haven't been verified.
 //? if UNOBFUSCATED {
-/*
-*///?} else {
+
+//?} else {
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
@@ -149,7 +149,7 @@ public abstract class SectionCompilerMixin {
             @Local(ordinal = 2) BlockPos blockPos
     ) {
         GreedyVanillaWorkState work = GREEDY_MESHING$STATE.get();
-        if (work.initialized() && GreedyRuntimeState.isRuntimeGreedyActive()) {
+        if (work.initialized() && work.greedyActive()) {
             int localX = blockPos.getX() - work.baseX();
             int localY = blockPos.getY() - work.baseY();
             int localZ = blockPos.getZ() - work.baseZ();
@@ -175,8 +175,8 @@ public abstract class SectionCompilerMixin {
     // branch — see the import guard above and GreedyEligibility.isGreedyWaterSource, which always
     // returns false there, making this omission a no-op rather than a behavior change.
     //? if UNOBFUSCATED {
-    /*
-    *///?} else {
+    
+    //?} else {
     @Redirect(
             method = "compile",
             at = @At(
@@ -193,7 +193,7 @@ public abstract class SectionCompilerMixin {
             FluidState fluidState
     ) {
         GreedyVanillaWorkState work = GREEDY_MESHING$STATE.get();
-        if (work.initialized() && GreedyRuntimeState.isRuntimeGreedyActive()
+        if (work.initialized() && work.greedyActive()
                 && GreedyEligibility.isGreedyWaterSource(state, level, pos)) {
             int localX = pos.getX() - work.baseX();
             int localY = pos.getY() - work.baseY();
@@ -239,7 +239,7 @@ public abstract class SectionCompilerMixin {
     ) {
         GreedyVanillaWorkState work = GREEDY_MESHING$STATE.get();
         try {
-            if (!GreedyRuntimeState.isRuntimeGreedyActive() || work.eligibleCount() <= 0) {
+            if (!work.greedyActive() || work.eligibleCount() <= 0) {
                 return;
             }
 
@@ -311,10 +311,10 @@ public abstract class SectionCompilerMixin {
                         // alpha to one and turns the transparent background into enlarged dark
                         // pixels.  The cutout buffer preserves the emissive texture's alpha.
                         //? if >=1.21.6 {
-                        BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, ChunkSectionLayer.CUTOUT);
-                        //?} else {
-                        /*BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, RenderType.cutout());
-                        *///?}
+                        /*BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, ChunkSectionLayer.CUTOUT);
+                        *///?} else {
+                        BufferBuilder emissiveBuilder = getOrBeginLayer(map, sectionBufferBuilderPack, RenderType.cutout());
+                        //?}
                         emittedQuads += emitTiledQuads(emissiveBuilder, quad,
                                 emissive.getU0(), emissive.getU1(), emissive.getV0(), emissive.getV1(),
                                 false, -1, renderSectionRegion, baseX, baseY, baseZ, work, true);
@@ -604,6 +604,11 @@ public abstract class SectionCompilerMixin {
         for (int i = 0; i < 8; i++) {
             pos.set(worldX + offsets[i][0], worldY + offsets[i][1], worldZ + offsets[i][2]);
             BlockState neighbor = region.getBlockState(pos);
+            //? if >=26.3 {
+            /*// 26.3 narrowed isViewBlocking to the camera near-plane check; vanilla and Sodium AO
+            // now test isLightPermeable(), which is the same solid-and-dampening predicate.
+            if (!neighbor.isLightPermeable()) {
+            *///?} else {
             if (neighbor.isViewBlocking(region, pos)
                     //? if UNOBFUSCATED {
                     /*&& neighbor.getLightDampening() != 0
@@ -613,6 +618,7 @@ public abstract class SectionCompilerMixin {
                     /*&& neighbor.getLightBlock(region, pos) != 0
                     *///?}
             ) {
+            //?}
                 key |= (1 << i);
             }
         }
