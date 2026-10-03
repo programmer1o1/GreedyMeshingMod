@@ -5,6 +5,29 @@ All notable changes to Greedy Meshing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.6.1]
+
+### Fixed
+- **Overlay/CTM resource packs disabling greedy meshing almost everywhere** (issue #20): packs such
+  as Matcha Block Overlays list hundreds of terrain blocks in their `optifine/ctm` properties, and
+  every listed block was excluded from merging at any distance. With Min Merge Distance set, those
+  blocks now merge beyond the zone while sections inside it keep rendering per-block, so the pack's
+  overlays stay intact up close. With Min Merge Distance at 0 the exclusion is unchanged unless
+  the new **Merge CTM Blocks** option (off by default, in the Cloth and Sodium settings) is on,
+  which merges those blocks at any distance.
+
+- **Chunk build lost to a null-pointer crash on 26.x** (issue #21): a model quad with a tint index
+  the block has no tint source for (seen with resource-pack models) made the merged-quad tint
+  lookup throw, discarding the section's greedy geometry and leaving the old mesh in place. A
+  missing tint source is now treated as untinted, as the pre-26 path already did.
+
+- **Sodium settings not following changes made in the Cloth/Mod Menu screen**: on the new Sodium
+  config API the Greedy Meshing page kept the values from when it was registered, so it showed
+  stale settings after a save from the Cloth screen and could write them back over it. It now
+  re-reads the saved settings after every save.
+
 ## [0.6.0]
 
 ### Added

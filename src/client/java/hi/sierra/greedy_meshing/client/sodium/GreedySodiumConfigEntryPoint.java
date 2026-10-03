@@ -24,6 +24,9 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
             GreedySpriteSupport.clearCache();
             draft[0] = GreedyConfig.snapshot();
         };
+        // The Cloth screen saves through GreedyConfig.apply() too; without this the draft above
+        // keeps the pre-Cloth values and Sodium shows (and can write back) stale settings.
+        GreedyConfig.setApplyListener(() -> draft[0] = GreedyConfig.snapshot());
 
         var page = builder.createOptionPage()
                 .setName(Component.literal("Greedy Meshing"));
@@ -65,6 +68,14 @@ public final class GreedySodiumConfigEntryPoint implements ConfigEntryPoint {
                 .setTooltip(Component.literal("Allow blocks with a facing/axis/rotation property (e.g. some modded blocks) to merge, but only once their model is verified to be a plain six-face cube with standard UVs. Raises the merge rate on normal terrain. EXPERIMENTAL: broadens what greedy meshing touches; report any block that renders wrong once merged."))
                 .setDefaultValue(false)
                 .setBinding(v -> draft[0].mergeOrientedBlocks = v, () -> draft[0].mergeOrientedBlocks)
+                .setStorageHandler(storage)
+                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
+
+        general.addOption(builder.createBooleanOption(GreedySodiumIds.of("merge_ctm_blocks"))
+                .setName(Component.literal("Merge CTM Blocks"))
+                .setTooltip(Component.literal("Merge blocks that a resource pack's connected/random-texture (CTM) rules cover, such as overlay packs. Big performance gain with those packs, but their per-block overlays are lost on merged faces. Already applied beyond Min Merge Distance when that is set."))
+                .setDefaultValue(false)
+                .setBinding(v -> draft[0].mergeCtmBlocks = v, () -> draft[0].mergeCtmBlocks)
                 .setStorageHandler(storage)
                 .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD));
 

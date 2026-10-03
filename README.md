@@ -54,6 +54,7 @@ Open the config screen via Mod Menu, or edit `config/greedy_meshing.json`:
 
 - **Enabled** - Toggle greedy meshing on/off
 - **Aggressive Greedy (Absolute)** - Merge across ambient-occlusion boundaries for the largest possible quads (off by default)
+- **Merge CTM Blocks** - Also merge blocks covered by a resource pack's connected/random-texture rules (e.g. overlay packs), losing their per-block effect (off by default; already applied beyond Min Merge Distance when that is set)
 - **Min Merge Distance** - Render sections within this many chunks of the player per-block instead of merged (0 = always merge)
 - **Debug Wireframe** - Show merged quad outlines
 - **Debug Comparison** - Split-screen greedy vs vanilla view

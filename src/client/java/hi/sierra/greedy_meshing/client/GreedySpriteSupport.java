@@ -6,6 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 //? if UNOBFUSCATED {
 /*import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -189,8 +190,21 @@ public final class GreedySpriteSupport {
         return Math.abs(value) < EPSILON || Math.abs(value - 1.0f) < EPSILON;
     }
 
+    /**
+     * CTM/random-texture blocks are normally kept out of merging (see {@link GreedyCtmSupport}).
+     * With Min Merge Distance set, sections near the player never reach greedy meshing at all, so
+     * the per-position effect is intact where it is visible and only distant terrain merges — where
+     * a pack that matches nearly every terrain block (e.g. overlay packs) would otherwise disable
+     * greedy meshing entirely (issue #20). The "Merge CTM Blocks" toggle lifts the exclusion at any
+     * distance. Read from config at call time; the per-BlockState cache is dropped whenever config
+     * is applied.
+     */
+    private static boolean ctmExcludesMerging() {
+        return !GreedyConfig.mergeCtmBlocks() && GreedyConfig.minMeshDistance() <= 0;
+    }
+
     private static boolean supportsModelSprites(BlockState state) {
-        if (GreedyCtmSupport.matchesBlock(state)) {
+        if (ctmExcludesMerging() && GreedyCtmSupport.matchesBlock(state)) {
             return false;
         }
         //? if UNOBFUSCATED {
@@ -298,7 +312,7 @@ public final class GreedySpriteSupport {
         return sprite.contents().width() > 0
                 && sprite.contents().height() > 0
                 && sprite.contents().width() == sprite.contents().height()
-                && !GreedyCtmSupport.matchesTile(state, sprite);
+                && !(ctmExcludesMerging() && GreedyCtmSupport.matchesTile(state, sprite));
     }
 
     /** True when the custom merged shader can reconstruct this sprite's UVs exactly. */

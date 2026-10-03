@@ -14,6 +14,7 @@ public final class GreedyConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("greedy_meshing.json");
     private static Data data = new Data();
+    private static volatile Runnable applyListener;
 
     private GreedyConfig() {
     }
@@ -61,6 +62,13 @@ public final class GreedyConfig {
         return data.mergeOrientedBlocks;
     }
 
+    /** Merge blocks that a resource pack's CTM/random-texture properties match, instead of leaving
+     *  them to the normal renderer. Their per-position texture can't survive merging, so this
+     *  trades the effect for performance everywhere (issue #20). */
+    public static boolean mergeCtmBlocks() {
+        return data.mergeCtmBlocks;
+    }
+
     public static boolean gpuCrackFix() {
         return data.gpuCrackFix;
     }
@@ -97,6 +105,7 @@ public final class GreedyConfig {
         StringBuilder sb = new StringBuilder();
         if (data.aggressiveGreedy) append(sb, "Aggressive");
         if (data.mergeOrientedBlocks) append(sb, "MergeOriented");
+        if (data.mergeCtmBlocks) append(sb, "MergeCTM");
         if (data.gpuCrackFix) append(sb, "CrackFix");
         if (data.greedyWater) append(sb, "GreedyWater");
         if (data.minMeshDistance > 0) append(sb, "MinMerge " + data.minMeshDistance);
@@ -116,6 +125,7 @@ public final class GreedyConfig {
         copy.aggressiveGreedy = data.aggressiveGreedy;
         copy.greedyWater = data.greedyWater;
         copy.mergeOrientedBlocks = data.mergeOrientedBlocks;
+        copy.mergeCtmBlocks = data.mergeCtmBlocks;
         copy.gpuCrackFix = data.gpuCrackFix;
         copy.debugWireframe = data.debugWireframe;
         copy.debugComparison = data.debugComparison;
@@ -133,6 +143,14 @@ public final class GreedyConfig {
         // otherwise keep serving verdicts from the previous setting.
         GreedyEligibility.clearCache();
         save();
+        Runnable listener = applyListener;
+        if (listener != null) listener.run();
+    }
+
+    /** Called after every apply(), so a screen that keeps its own draft (Sodium's) can re-read the
+     *  saved values when another screen (Cloth's) changed them. Single slot: the latest wins. */
+    public static void setApplyListener(Runnable listener) {
+        applyListener = listener;
     }
 
     public static final class Data {
@@ -153,6 +171,8 @@ public final class GreedyConfig {
          *  the ones that are not would render with stretched or rotated textures when merged, so
          *  admission is gated on inspecting the actual model. Experimental, off by default. */
         public boolean mergeOrientedBlocks = false;
+        /** Merge CTM/random-texture blocks too (off = they stay on the normal render path). */
+        public boolean mergeCtmBlocks = false;
         /** Nudges a merged quad's outer-boundary vertices outward by a small epsilon to avoid
          *  view-dependent raster cracks ("T-junction gaps") seen on some mobile and desktop GPU
          *  drivers (e.g. Apple M-series). Adds no geometry, so it's cheap enough to default on. */

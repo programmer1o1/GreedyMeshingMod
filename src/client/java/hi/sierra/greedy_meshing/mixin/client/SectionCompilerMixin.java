@@ -956,7 +956,10 @@ public abstract class SectionCompilerMixin {
             //?}
         }
         //? if UNOBFUSCATED {
-        /*int tint = blockColors.getTintSource(state, tintIndex).colorInWorld(state, region, samplePos);
+        /*// A model can carry a tintindex the block has no tint source for (resource-pack models,
+        // issue #21); the legacy getColor path reports that as -1, so treat null the same way.
+        var tintSource = blockColors.getTintSource(state, tintIndex);
+        int tint = tintSource == null ? -1 : tintSource.colorInWorld(state, region, samplePos);
         *///?} else {
         int tint = blockColors.getColor(state, region, samplePos, tintIndex);
         //?}

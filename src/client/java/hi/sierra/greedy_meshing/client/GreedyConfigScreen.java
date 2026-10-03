@@ -73,6 +73,12 @@ public final class GreedyConfigScreen {
                 .setSaveConsumer(v -> draft.mergeOrientedBlocks = v)
                 .build());
 
+        general.addEntry(entries.startBooleanToggle(Component.literal("Merge CTM Blocks"), draft.mergeCtmBlocks)
+                .setDefaultValue(false)
+                .setTooltip(Component.literal("Merge blocks that a resource pack's connected/random-texture (CTM) rules cover, such as overlay packs. Big performance gain with those packs, but their per-block overlays are lost on merged faces. Already applied beyond Min Merge Distance when that is set."))
+                .setSaveConsumer(v -> draft.mergeCtmBlocks = v)
+                .build());
+
         general.addEntry(entries.startBooleanToggle(Component.literal("GPU Crack Fix"), draft.gpuCrackFix)
                 .setDefaultValue(true)
                 .setTooltip(Component.literal("Nudges merged faces' outer edges outward by a tiny amount to prevent view-dependent sky-colored holes, seen on some mobile and desktop GPU drivers (including Apple M-series). Adds no geometry, so it's cheap to leave on; disable only for debugging."))

@@ -1145,7 +1145,10 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             //?}
         }
         //? if UNOBFUSCATED {
-        /*int tint = blockColors.getTintSource(state, tintIndex).colorInWorld(state, world, samplePos);
+        /*// A model can carry a tintindex the block has no tint source for (resource-pack models,
+        // issue #21); the legacy getColor path reports that as -1, so treat null the same way.
+        var tintSource = blockColors.getTintSource(state, tintIndex);
+        int tint = tintSource == null ? -1 : tintSource.colorInWorld(state, world, samplePos);
         *///?} else {
         int tint = blockColors.getColor(state, world, samplePos, tintIndex);
         //?}
