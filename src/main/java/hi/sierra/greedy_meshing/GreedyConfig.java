@@ -16,10 +16,19 @@ public final class GreedyConfig {
     private static Data data = new Data();
     private static volatile Runnable applyListener;
 
+    /** Nvidium draws terrain through its own mesh shaders and never loads Sodium's terrain shader,
+     *  which is where merged quads get their tiled UVs rebuilt, so merged faces render with broken
+     *  textures (issue #22). Merging is switched off rather than drawing wrong. */
+    private static final boolean NVIDIUM_PRESENT = FabricLoader.getInstance().isModLoaded("nvidium");
+
     private GreedyConfig() {
     }
 
     public static void load() {
+        if (NVIDIUM_PRESENT) {
+            org.slf4j.LoggerFactory.getLogger("greedy_meshing")
+                    .warn("Nvidium detected: greedy meshing is disabled because merged faces do not render correctly through Nvidium's terrain renderer.");
+        }
         if (!Files.exists(CONFIG_PATH)) {
             save();
             return;
@@ -47,7 +56,7 @@ public final class GreedyConfig {
     }
 
     public static boolean enabled() {
-        return data.enabled;
+        return data.enabled && !NVIDIUM_PRESENT;
     }
 
     public static boolean aggressiveGreedy() {

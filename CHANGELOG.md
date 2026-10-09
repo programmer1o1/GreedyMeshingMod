@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2]
+
+### Fixed
+- **Broken terrain textures with Nvidium** (issue #22): Nvidium renders terrain with its own mesh
+  shaders, so merged faces never got their tiled UVs rebuilt and drew flat or wrong. Greedy
+  meshing is now switched off automatically when Nvidium is installed.
+
 ## [0.6.1]
 
 ### Fixed
