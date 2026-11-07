@@ -292,6 +292,10 @@ public final class GreedyMesher {
                 int cellBase = depth << 8;
                 int nGroups = 0;
                 int lastGid = -1;
+                int stamp = bw.nextStamp();
+                int[] hStamp = bw.hashStamp;
+                long[] hKey = bw.hashKey;
+                int[] hVal = bw.hashVal;
 
                 for (int c = 0; c < cellCount; c++) {
                     int bi = depthCells[cellBase + c];
@@ -302,12 +306,18 @@ public final class GreedyMesher {
 
                     long ck = ((long) System.identityHashCode(block) << 32) | (faceKeys[bi] & 0xFFFFFFFFL);
                     int gid = -1;
-                    // Runs of one block state dominate, so check the previous group before scanning.
+                    int slot = -1;
+                    // Runs of one block state dominate, so check the previous group first. Otherwise
+                    // probe a small open-addressed table: a slice has at most 256 cells, so a 512-slot
+                    // table stays at most half full and lookups stay O(1) where the old linear scan was
+                    // O(groups) per cell (it dominated sections with many AO/light variants).
                     if (lastGid >= 0 && keys[lastGid] == ck) {
                         gid = lastGid;
                     } else {
-                        for (int g = 0; g < nGroups; g++) {
-                            if (keys[g] == ck) { gid = g; break; }
+                        slot = (int) ((ck * 0x9E3779B97F4A7C15L) >>> (64 - BinarySweepState.HASH_BITS));
+                        while (hStamp[slot] == stamp) {
+                            if (hKey[slot] == ck) { gid = hVal[slot]; break; }
+                            slot = (slot + 1) & BinarySweepState.HASH_MASK;
                         }
                     }
                     if (gid == -1) {
@@ -324,6 +334,9 @@ public final class GreedyMesher {
                         gid = nGroups++;
                         keys[gid] = ck;
                         origins[gid] = bi;
+                        hStamp[slot] = stamp;
+                        hKey[slot] = ck;
+                        hVal[slot] = gid;
                         for (int r = 0; r < SECTION_SIZE; r++) rows[gid * SECTION_SIZE + r] = 0;
                     }
                     lastGid = gid;
@@ -470,5 +483,23 @@ public final class GreedyMesher {
         /** Visible block indices bucketed by depth slice: slot {@code depth * 256 + n}. */
         final int[] depthCells = new int[SECTION_SIZE * SECTION_SIZE * SECTION_SIZE];
         final int[] depthCounts = new int[SECTION_SIZE];
+
+        /** Open-addressed group lookup for one depth slice; 512 slots for at most 256 cells. */
+        static final int HASH_BITS = 9;
+        static final int HASH_SIZE = 1 << HASH_BITS;
+        static final int HASH_MASK = HASH_SIZE - 1;
+        final int[] hashStamp = new int[HASH_SIZE];
+        final long[] hashKey = new long[HASH_SIZE];
+        final int[] hashVal = new int[HASH_SIZE];
+        private int stamp;
+
+        /** A fresh stamp invalidates every slot at once, so the table is never cleared per slice. */
+        int nextStamp() {
+            if (++stamp == Integer.MAX_VALUE) {
+                java.util.Arrays.fill(hashStamp, 0);
+                stamp = 1;
+            }
+            return stamp;
+        }
     }
 }
