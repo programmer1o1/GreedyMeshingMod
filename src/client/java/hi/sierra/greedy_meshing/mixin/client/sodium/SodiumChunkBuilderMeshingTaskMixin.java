@@ -62,11 +62,13 @@ import net.minecraft.world.level.material.Fluids;
 import hi.sierra.greedy_meshing.GreedyConfig;
 import hi.sierra.greedy_meshing.GreedyEligibility;
 import hi.sierra.greedy_meshing.GreedyMesher;
+import hi.sierra.greedy_meshing.client.GreedyColorLightCompat;
 import hi.sierra.greedy_meshing.client.GreedyDebugStore;
 import hi.sierra.greedy_meshing.client.GreedyEmissiveSupport;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySectionCache;
 import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 import hi.sierra.greedy_meshing.client.sodium.GreedySodiumWorkState;
 import org.slf4j.Logger;
@@ -116,7 +118,9 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             CancellationToken cancellationToken,
             CallbackInfoReturnable<ChunkBuildOutput> cir
     ) {
-        GREEDY_MESHING$STATE.remove();
+        // Keep the (large, reusable) work state on its worker thread and just drop the references
+        // into this build. Removing it reallocated ~200 KiB of arrays for every single section.
+        GREEDY_MESHING$STATE.get().release();
     }
 
     //? if UNOBFUSCATED {
@@ -150,8 +154,13 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
-                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
+        if (!greedyMeshing$isEligible(work, state, worldPos)) {
+            renderer.renderModel(model, state, worldPos, modelOffset);
+            return;
+        }
+        // ColorLight in vertex-colour mode bakes its light into the model quads, which merged quads
+        // bypass: keep blocks next to coloured light on the normal path (no-op in GPU mode).
+        if (GreedyColorLightCompat.mustStayPerBlock(worldPos.getX(), worldPos.getY(), worldPos.getZ())) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
@@ -200,8 +209,13 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
-                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
+        if (!greedyMeshing$isEligible(work, state, worldPos)) {
+            renderer.renderModel(model, state, worldPos, modelOffset);
+            return;
+        }
+        // ColorLight in vertex-colour mode bakes its light into the model quads, which merged quads
+        // bypass: keep blocks next to coloured light on the normal path (no-op in GPU mode).
+        if (GreedyColorLightCompat.mustStayPerBlock(worldPos.getX(), worldPos.getY(), worldPos.getZ())) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
@@ -250,8 +264,13 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             return;
         }
 
-        if (!GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
-                || !GreedySpriteSupport.supportsGreedySpriteSizes(state)) {
+        if (!greedyMeshing$isEligible(work, state, worldPos)) {
+            renderer.renderModel(model, state, worldPos, modelOffset);
+            return;
+        }
+        // ColorLight in vertex-colour mode bakes its light into the model quads, which merged quads
+        // bypass: keep blocks next to coloured light on the normal path (no-op in GPU mode).
+        if (GreedyColorLightCompat.mustStayPerBlock(worldPos.getX(), worldPos.getY(), worldPos.getZ())) {
             renderer.renderModel(model, state, worldPos, modelOffset);
             return;
         }
@@ -270,6 +289,17 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
         work.sectionStates()[idx] = state;
     }
     //?}
+
+    @Unique
+    private static boolean greedyMeshing$isEligible(GreedySodiumWorkState work, BlockState state, BlockPos worldPos) {
+        if (work.hasVerdictFor(state)) {
+            return work.lastVerdictFor(state);
+        }
+        boolean verdict = GreedyEligibility.isGreedyOpaqueCube(state, work.world(), worldPos)
+                && GreedySpriteSupport.supportsGreedySpriteSizes(state);
+        work.rememberVerdict(state, verdict);
+        return verdict;
+    }
 
     /**
      * Water's fluid quads go through Sodium's own FluidRenderer.render(...), a code path entirely
@@ -390,7 +420,10 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                     !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4);
             BitSet[] visibleFaces = GREEDY_MESHING$VISIBLE.get();
             long[][] mergeKeys = work.faceMergeKeys();
-            populateFaceVisibility(work.world(), work.sectionStates(), visibleFaces, mergeKeys, baseX, baseY, baseZ);
+            GreedySectionCache sectionCache = work.sectionCache;
+            sectionCache.begin(work.world(), baseX, baseY, baseZ);
+            work.scratchLighting.cache = sectionCache;
+            populateFaceVisibility(work.world(), sectionCache, work.sectionStates(), visibleFaces, mergeKeys, baseX, baseY, baseZ);
             List<GreedyMesher.GreedyQuad> merged = GreedyMesher.meshWithKeys(
                     work.sectionStates(), visibleFaces, mergeKeys
             );
@@ -506,7 +539,45 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
     }
 
     @Unique
+    private static final java.util.concurrent.ConcurrentHashMap<BlockState, List<FaceAppearance>[]> GREEDY_MESHING$LAYER_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    @Unique
+    private static volatile int GREEDY_MESHING$LAYER_GENERATION = -1;
+
+    /**
+     * Resolving a face walked the baked model and allocated a RandomSource and lists for every merged
+     * quad. The answer only depends on (state, face) until resources reload or settings change, which
+     * is exactly when {@link GreedySpriteSupport#generation()} moves.
+     */
+    @Unique
+    @SuppressWarnings("unchecked")
     private static List<FaceAppearance> greedyMeshing$resolveFaceLayers(BlockState state, Direction face) {
+        int generation = GreedySpriteSupport.generation();
+        if (generation != GREEDY_MESHING$LAYER_GENERATION) {
+            GREEDY_MESHING$LAYER_CACHE.clear();
+            GREEDY_MESHING$LAYER_GENERATION = generation;
+        }
+        List<FaceAppearance>[] perFace = GREEDY_MESHING$LAYER_CACHE.get(state);
+        if (perFace == null) {
+            perFace = new List[6];
+            List<FaceAppearance>[] existing = GREEDY_MESHING$LAYER_CACHE.putIfAbsent(state, perFace);
+            if (existing != null) {
+                perFace = existing;
+            }
+        }
+        int fi = face.ordinal();
+        List<FaceAppearance> cached = perFace[fi];
+        if (cached == null) {
+            cached = List.copyOf(greedyMeshing$resolveFaceLayersUncached(state, face));
+            if (generation == GreedySpriteSupport.generation()) {
+                perFace[fi] = cached;
+            }
+        }
+        return cached;
+    }
+
+    @Unique
+    private static List<FaceAppearance> greedyMeshing$resolveFaceLayersUncached(BlockState state, Direction face) {
         if (state.is(Blocks.WATER)) {
             return greedyMeshing$resolveWaterFaceLayers(state);
         }
@@ -599,6 +670,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
     @Unique
     private static void populateFaceVisibility(
             BlockAndTintGetter world,
+            GreedySectionCache cache,
             BlockState[] sectionStates,
             BitSet[] visibleFaces,
             long[][] faceMergeKeys,
@@ -632,7 +704,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                         }
 
                         samplePos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
-                        BlockState neighbor = world.getBlockState(samplePos);
+                        BlockState neighbor = cache.state(samplePos.getX(), samplePos.getY(), samplePos.getZ());
                         //? if >=1.21.2 {
                         if (Block.shouldRenderFace(state, neighbor, face)) {
                         //?} else {
@@ -660,7 +732,7 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
                                 // per sub-quad.
                                 mergeKey = GreedyConfig.aggressiveGreedy()
                                         ? 0
-                                        : computeAoKey(world, samplePos, worldX, worldY, worldZ, face);
+                                        : computeAoKey(cache, worldX, worldY, worldZ, face);
                             }
                             faceMergeKeys[face.ordinal()][idx] = mergeKey;
                         }
@@ -727,33 +799,18 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
     }
 
     @Unique
-    private static int computeAoKey(BlockAndTintGetter world, BlockPos.MutableBlockPos pos,
+    private static int computeAoKey(GreedySectionCache cache,
                                     int worldX, int worldY, int worldZ, Direction face) {
         int[][] offsets = GREEDY_MESHING$AO_OFFSETS[face.ordinal()];
         int key = 0;
         for (int i = 0; i < 8; i++) {
-            pos.set(worldX + offsets[i][0], worldY + offsets[i][1], worldZ + offsets[i][2]);
-            BlockState neighbor = world.getBlockState(pos);
-            //? if >=26.3 {
-            /*// 26.3 narrowed isViewBlocking to the camera near-plane check; vanilla and Sodium AO
-            // now test isLightPermeable(), which is the same solid-and-dampening predicate.
-            if (!neighbor.isLightPermeable()) {
-            *///?} else {
-            if (neighbor.isViewBlocking(world, pos)
-                    //? if UNOBFUSCATED {
-                    /*&& neighbor.getLightDampening() != 0
-                    *///?} else if >=1.21.2 {
-                    && neighbor.getLightBlock() != 0
-                    //?} else {
-                    /*&& neighbor.getLightBlock(world, pos) != 0
-                    *///?}
-            ) {
-            //?}
+            // occludes() is the same predicate the old inline test used (isLightPermeable on 26.3,
+            // isViewBlocking + light dampening before), evaluated once per cell instead of per face.
+            if (cache.occludes(worldX + offsets[i][0], worldY + offsets[i][1], worldZ + offsets[i][2])) {
                 key |= (1 << i);
             }
         }
-        pos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
-        int packedLight = GreedyLighting.mergeLightKey(world, pos);
+        int packedLight = cache.light(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
         key |= ((packedLight >>> 4) & 0xF) << 8;
         key |= ((packedLight >>> 20) & 0xF) << 12;
         return key;

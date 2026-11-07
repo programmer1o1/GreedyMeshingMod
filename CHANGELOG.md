@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Merged faces rendering as one flat colour with ColorLight (GPU pipeline)**: ColorLight redirects
+  Sodium's terrain pipelines to its own copy of the shader (`colorlight:blocks/colored_terrain`), so
+  the greedy UV patch never reached it. The patch now also applies to that shader. Two related
+  problems in the injected code are fixed with it: the atlas sampler is now picked by name
+  (`u_BlockTex`) instead of "first `sampler2D`", which in ColorLight's copy is the 16x16 lightmap,
+  and the face marker carried in vertex alpha is cleared from ColorLight's `v_ColorBase` too.
+- **ColorLight in vertex-colour mode** (pipeline switched off, unsupported Sodium build, or an Iris
+  pack active): merged quads bypass the model where ColorLight bakes its colour, so they came out
+  uncoloured. Blocks next to coloured light now stay on the per-block path in that mode; light-free
+  areas still merge. No effect while the GPU pipeline is active or ColorLight is absent.
+
+### Performance (Sodium path)
+- The per-thread work state is kept between section builds instead of being removed after each one,
+  which reallocated about 200 KiB of arrays per section.
+- Face visibility, AO merge keys and per-corner smooth lighting read neighbouring blocks, light and
+  occlusion through a lazily filled 18x18x18 per-section cache instead of the world slice.
+- Face layers (model walk, sprite lookup) are cached per block state and face until resources reload.
+- Per-block eligibility checks are memoised for runs of the same block state.
+- The merge sweep groups faces with a small hash table instead of scanning every group per cell.
+
 ## [0.6.1]
 
 ### Fixed

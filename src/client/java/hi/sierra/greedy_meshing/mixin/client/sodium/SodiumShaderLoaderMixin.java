@@ -55,7 +55,13 @@ public abstract class SodiumShaderLoaderMixin {
         // by the greedy path and merged faces render as a single flat colour (issue #5).
         boolean milkshadeTerrainShader = "milkshade".equals(namespace)
                 && "sodium/block_layer_opaque".equals(path);
-        if (!sodiumTerrainShader && !milkshadeTerrainShader) {
+        // ColorLight's GPU lighting pipeline redirects Sodium's terrain pipelines to its own copy of
+        // the shader (colorlight:blocks/colored_terrain), so Sodium's resource never gets requested.
+        // Without patching the copy too, merged faces keep the sprite-centre UV and render as a single
+        // flat colour. The copy keeps Sodium's v_TexCoord/u_BlockTex interface and vertex format.
+        boolean colorLightTerrainShader = "colorlight".equals(namespace)
+                && "blocks/colored_terrain".equals(path);
+        if (!sodiumTerrainShader && !milkshadeTerrainShader && !colorLightTerrainShader) {
             return;
         }
         String source = cir.getReturnValue();
@@ -130,9 +136,18 @@ public abstract class SodiumShaderLoaderMixin {
         // Add assignments at the end of main()
         int lastBrace = source.lastIndexOf('}');
         if (lastBrace < 0) return source;
+        // ColorLight forwards the raw vertex colour (v_ColorBase) and multiplies it in itself, so the
+        // face marker in its alpha has to be cleared there as well (v_Color is handled in the fragment).
+        String clearMarker = source.contains("v_ColorBase")
+                ? "#ifndef OIT_ALPHA_ONLY\n"
+                  + "    if (_gm_id > 233.5 && _gm_id < 251.5) v_ColorBase.a = 1.0;\n"
+                  + "#endif\n"
+                : "";
         source = source.substring(0, lastBrace)
-                + "\n    v_BlockPos = _vert_position;\n"
-                + "    v_GreedyFaceId = _vert_color.a * 255.0;\n"
+                + "\n    float _gm_id = _vert_color.a * 255.0;\n"
+                + "    v_BlockPos = _vert_position;\n"
+                + "    v_GreedyFaceId = _gm_id;\n"
+                + clearMarker
                 + source.substring(lastBrace);
 
         return source;
@@ -149,10 +164,23 @@ public abstract class SodiumShaderLoaderMixin {
         }
 
         // Find the block texture sampler name
-        String samplerName = "u_BlockTex";
+        // Prefer u_BlockTex by name: ColorLight's copy declares u_LightTex first, and sizing sprites
+        // from the 16x16 lightmap instead of the atlas collapses every merged face to one texel.
+        String samplerName = null;
+        String firstSampler = null;
         Matcher m = GREEDY_MESHING$SAMPLER_PATTERN.matcher(source);
-        if (m.find()) {
-            samplerName = m.group(1);
+        while (m.find()) {
+            String candidate = m.group(1);
+            if ("u_BlockTex".equals(candidate)) {
+                samplerName = candidate;
+                break;
+            }
+            if (firstSampler == null && !"u_LightTex".equals(candidate)) {
+                firstSampler = candidate;
+            }
+        }
+        if (samplerName == null) {
+            samplerName = firstSampler != null ? firstSampler : "u_BlockTex";
         }
 
         // 1. Add varying declarations before void main()

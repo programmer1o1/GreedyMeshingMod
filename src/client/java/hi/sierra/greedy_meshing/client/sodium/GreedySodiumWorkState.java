@@ -15,6 +15,7 @@ import hi.sierra.greedy_meshing.GreedyMesher;
 
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySectionCache;
 
 import java.util.Arrays;
 
@@ -31,11 +32,16 @@ public final class GreedySodiumWorkState {
     private long sectionKey = Long.MIN_VALUE;
     private int eligibleCount;
     private boolean captureDebug;
+    // One-entry memo for the per-block eligibility verdict: neighbouring blocks are very often the
+    // same state, and the verdict is a per-state constant (both lookups ignore the position).
+    private BlockState lastVerdictState;
+    private boolean lastVerdict;
 
     // Pre-allocated scratch objects for emitMergedQuad / emitTiledQuads to avoid per-call allocation
     public final float[] scratchCorners = new float[12];
     public final GreedyLighting.Scratch scratchLighting = new GreedyLighting.Scratch();
     public final BlockPos.MutableBlockPos scratchTintPos = new BlockPos.MutableBlockPos();
+    public final GreedySectionCache sectionCache = new GreedySectionCache();
     public final int[][] scratchCornerBlocks = new int[4][3];
     public final float[] scratchBrightness = new float[4];
     public final int[] scratchLightmap = new int[4];
@@ -52,7 +58,36 @@ public final class GreedySodiumWorkState {
         this.sectionKey = Long.MIN_VALUE;
         this.eligibleCount = 0;
         this.captureDebug = GreedyConfig.debugWireframe() || GreedyConfig.debugTrianglesHud() || GreedyConfig.debugComparison();
+        this.lastVerdictState = null;
         Arrays.fill(this.sectionStates, null);
+    }
+
+    /**
+     * Called when a section build finishes. The state object is kept on its worker thread (it holds
+     * ~200 KiB of reusable arrays that used to be reallocated for every section), so only the
+     * references into the finished build are dropped here.
+     */
+    public void release() {
+        this.buildContext = null;
+        this.world = null;
+        this.blockRenderer = null;
+        this.sectionOrigin = null;
+        this.lastVerdictState = null;
+        this.sectionCache.end();
+        this.scratchLighting.cache = null;
+    }
+
+    public boolean lastVerdictFor(BlockState state) {
+        return state == lastVerdictState && lastVerdictState != null && lastVerdict;
+    }
+
+    public boolean hasVerdictFor(BlockState state) {
+        return state == lastVerdictState && lastVerdictState != null;
+    }
+
+    public void rememberVerdict(BlockState state, boolean verdict) {
+        this.lastVerdictState = state;
+        this.lastVerdict = verdict;
     }
 
     public BlockState[] sectionStates() {

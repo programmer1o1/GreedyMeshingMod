@@ -55,8 +55,16 @@ public final class GreedySpriteSupport {
         return result;
     }
 
+    private static volatile int generation;
+
+    /** Bumped whenever cached per-state verdicts (and anything derived from the models) go stale. */
+    public static int generation() {
+        return generation;
+    }
+
     /** Dropped when config changes, since the oriented-block verdict depends on a config flag. */
     public static void clearCache() {
+        generation++;
         CACHE.clear();
     }
 
