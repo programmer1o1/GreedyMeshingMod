@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Experimental greedy meshing with Nvidium 0.4.4-beta7 on Minecraft 26.3. Add
+  JVM argument -Dgreedy_meshing.experimentalNvidium=true to test the integration. Remove it to
+  restore the automatic fallback.
+
+### Fixed
+- **Merged faces rendering as one flat colour with ColorLight (GPU pipeline)**: ColorLight redirects
+  Sodium's terrain pipelines to its own copy of the shader, so the greedy UV patch never reached it.
+  The patch now also applies to that shader. The atlas sampler is selected by name, and the face
+  marker carried in vertex alpha is cleared from ColorLight's v_ColorBase too.
+- **ColorLight in vertex-colour mode** (pipeline switched off, unsupported Sodium build, or an Iris
+  pack active): merged quads bypass the model where ColorLight bakes its colour. Blocks next to
+  coloured light now stay on the per-block path in that mode.
+
+### Performance (Sodium path)
+- Reuse per-thread build state, cache section lighting and neighbor reads, and cache face layers and
+  eligibility verdicts to reduce chunk-build work.
+- Use a hash table for face groups during the merge sweep.
+
 ## [0.6.2]
 
 ### Fixed
