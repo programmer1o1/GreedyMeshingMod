@@ -298,7 +298,8 @@ public abstract class VulkanBuildTaskMixin {
         int baseY = origin.getY();
         int baseZ = origin.getZ();
         work.scratchLighting.applyDirectionalShade =
-                !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4);
+                !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4)
+                    && !GreedyRuntimeState.isFlatLighting();
         BitSet[] visibleFaces = GREEDY_MESHING$VISIBLE.get();
         long[][] mergeKeys = work.faceMergeKeys();
         populateFaceVisibility(world, work.sectionStates(), visibleFaces, mergeKeys, baseX, baseY, baseZ);

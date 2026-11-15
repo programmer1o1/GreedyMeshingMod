@@ -24,6 +24,17 @@ public final class GreedyRuntimeState {
     private GreedyRuntimeState() {
     }
 
+    /** True when Flat Lighting is installed and its cardinal lighting is off (reads its config only). */
+    public static boolean isFlatLighting() {
+        try {
+            return FabricLoader.getInstance().isModLoaded("flat-lighting")
+                    && java.nio.file.Files.readString(FabricLoader.getInstance().getConfigDir().resolve("flat-lighting.json"))
+                            .replace(" ", "").contains("\"cardinalLighting\":false");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static boolean isRuntimeGreedyActive() {
         return GreedyConfig.enabled();
     }
