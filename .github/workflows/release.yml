@@ -43,7 +43,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build all versions
-        run: ./gradlew build --build-cache --parallel --stacktrace
+        # Match the serial build in CI to avoid races between Loom remappers.
+        run: ./gradlew build --build-cache --no-parallel --max-workers=1 --stacktrace
 
       - name: Get version from tag
         id: version

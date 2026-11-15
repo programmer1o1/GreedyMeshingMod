@@ -25,7 +25,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build all versions
-        run: ./gradlew build
+        # Loom versions in this build can close JARs that another remapper is still reading.
+        run: ./gradlew build --no-parallel --max-workers=1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
