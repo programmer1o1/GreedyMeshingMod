@@ -9,6 +9,8 @@
     "SodiumChunkBuilderTaskAccessor",
     "SodiumChunkBuildContextAccessor",
     "SodiumBlockRendererAccessor",
+    "NvidiumShaderLoaderMixin",
+    "NvidiumCompactVertexMixin",
     "SodiumShaderLoaderMixin"
   ],
   "injectors": {
