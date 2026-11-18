@@ -24,15 +24,26 @@ public final class GreedyRuntimeState {
     private GreedyRuntimeState() {
     }
 
-    /** True when Flat Lighting is installed and its cardinal lighting is off (reads its config only). */
+    private static final boolean FLAT_LIGHTING_LOADED = FabricLoader.getInstance().isModLoaded("flat-lighting");
+    private static volatile boolean flatLighting;
+    private static volatile long flatLightingCheckNanos;
+
+    /** True when Flat Lighting is installed and its cardinal lighting is off (reads its config only, re-read at most once a second). */
     public static boolean isFlatLighting() {
-        try {
-            return FabricLoader.getInstance().isModLoaded("flat-lighting")
-                    && java.nio.file.Files.readString(FabricLoader.getInstance().getConfigDir().resolve("flat-lighting.json"))
-                            .replace(" ", "").contains("\"cardinalLighting\":false");
-        } catch (Exception e) {
+        if (!FLAT_LIGHTING_LOADED) {
             return false;
         }
+        long now = System.nanoTime();
+        if (now - flatLightingCheckNanos > 1_000_000_000L) {
+            flatLightingCheckNanos = now;
+            try {
+                flatLighting = java.nio.file.Files.readString(FabricLoader.getInstance().getConfigDir().resolve("flat-lighting.json"))
+                        .replace(" ", "").contains("\"cardinalLighting\":false");
+            } catch (Exception e) {
+                flatLighting = false;
+            }
+        }
+        return flatLighting;
     }
 
     public static boolean isRuntimeGreedyActive() {
