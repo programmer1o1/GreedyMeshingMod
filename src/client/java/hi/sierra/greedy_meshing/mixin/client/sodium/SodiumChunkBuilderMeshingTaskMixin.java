@@ -417,7 +417,8 @@ public abstract class SodiumChunkBuilderMeshingTaskMixin {
             int baseY = work.sectionOrigin().getY();
             int baseZ = work.sectionOrigin().getZ();
             work.scratchLighting.applyDirectionalShade =
-                    !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4);
+                    !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4)
+                    && !GreedyRuntimeState.isFlatLighting();
             BitSet[] visibleFaces = GREEDY_MESHING$VISIBLE.get();
             long[][] mergeKeys = work.faceMergeKeys();
             GreedySectionCache sectionCache = work.sectionCache;

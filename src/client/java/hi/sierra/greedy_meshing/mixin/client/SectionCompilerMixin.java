@@ -247,7 +247,8 @@ public abstract class SectionCompilerMixin {
             int baseY = work.baseY();
             int baseZ = work.baseZ();
             work.scratchLighting.applyDirectionalShade =
-                    !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4);
+                    !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4)
+                    && !GreedyRuntimeState.isFlatLighting();
 
             long[][] mergeKeys = work.faceMergeKeys();
             populateFaceVisibility(renderSectionRegion, work.sectionStates(), work.visibleFaces(), mergeKeys, baseX, baseY, baseZ, work.eligibleIndices(), work.eligibleCount());
