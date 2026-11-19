@@ -25,6 +25,14 @@ public final class GreedySectionCache {
     private static final int CELLS = PAD * PAD * PAD;
     private static final int LIGHT_UNKNOWN = Integer.MIN_VALUE;
 
+    // Vanilla and Vulkan recreate their per-compile work state every build, so the ~50 KiB of cache
+    // arrays live here per thread instead of being reallocated for each section.
+    private static final ThreadLocal<GreedySectionCache> THREAD = ThreadLocal.withInitial(GreedySectionCache::new);
+
+    public static GreedySectionCache forThread() {
+        return THREAD.get();
+    }
+
     private final BlockState[] states = new BlockState[CELLS];
     private final int[] light = new int[CELLS];
     /** 0 = unknown, 1 = does not occlude, 2 = occludes (see {@link #occludes}). */

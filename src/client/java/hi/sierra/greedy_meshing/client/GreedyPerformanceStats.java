@@ -15,6 +15,11 @@ public final class GreedyPerformanceStats {
     private static final LongAdder MERGED_QUADS = new LongAdder();
     private static final LongAdder EMITTED_QUADS = new LongAdder();
     private static final LongAdder VANILLA_EQUIVALENT_QUADS = new LongAdder();
+    // Wall-clock cost of the greedy step (visibility, merge, emit) per section that produced
+    // geometry. Meant for A/B comparing builds: F3+L's compile-queue metric is blind to Sodium.
+    private static final LongAdder BUILD_NANOS = new LongAdder();
+    private static final LongAdder BUILD_COUNT = new LongAdder();
+    private static final AtomicLong BUILD_MAX_NANOS = new AtomicLong();
 
     /**
      * Per-section geometry for sections that are currently built, keyed by
@@ -40,6 +45,9 @@ public final class GreedyPerformanceStats {
         MERGED_QUADS.reset();
         EMITTED_QUADS.reset();
         VANILLA_EQUIVALENT_QUADS.reset();
+        BUILD_NANOS.reset();
+        BUILD_COUNT.reset();
+        BUILD_MAX_NANOS.set(0);
         LIVE_SECTIONS.clear();
         LIVE_EMITTED.set(0);
         LIVE_VANILLA_EQUIVALENT.set(0);
@@ -103,6 +111,33 @@ public final class GreedyPerformanceStats {
         MERGED_QUADS.add(Math.max(0, mergedQuads));
         EMITTED_QUADS.add(Math.max(0, emittedQuads));
         VANILLA_EQUIVALENT_QUADS.add(Math.max(0, vanillaEquivalent));
+    }
+
+    /** Records one section's greedy build time; called from each backend after the emit. */
+    public static void recordBuildNanos(long nanos) {
+        BUILD_NANOS.add(nanos);
+        BUILD_COUNT.increment();
+        BUILD_MAX_NANOS.accumulateAndGet(nanos, Math::max);
+    }
+
+    public static long buildCount() {
+        return BUILD_COUNT.sum();
+    }
+
+    public static double buildAverageMillis() {
+        long count = BUILD_COUNT.sum();
+        return count == 0 ? 0.0 : BUILD_NANOS.sum() / (double) count / 1_000_000.0;
+    }
+
+    /** One HUD line: average and worst per-section greedy build time since the last reset. */
+    public static String formatBuildTime() {
+        long count = BUILD_COUNT.sum();
+        if (count == 0) {
+            return "Greedy build time: no sections yet";
+        }
+        double avgMs = BUILD_NANOS.sum() / (double) count / 1_000_000.0;
+        double maxMs = BUILD_MAX_NANOS.get() / 1_000_000.0;
+        return String.format("Greedy build time: avg %.3f ms, max %.2f ms (%d sections)", avgMs, maxMs, count);
     }
 
     public static Snapshot snapshot() {
