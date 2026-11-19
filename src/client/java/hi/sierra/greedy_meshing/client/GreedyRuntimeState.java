@@ -5,7 +5,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import hi.sierra.greedy_meshing.GreedyConfig;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Locale;
 
 public final class GreedyRuntimeState {
@@ -27,8 +32,14 @@ public final class GreedyRuntimeState {
     private static final boolean FLAT_LIGHTING_LOADED = FabricLoader.getInstance().isModLoaded("flat-lighting");
     private static volatile boolean flatLighting;
     private static volatile long flatLightingCheckNanos;
+    private static volatile long flatLightingModified = Long.MIN_VALUE;
 
-    /** True when Flat Lighting is installed and its cardinal lighting is off (reads its config only, re-read at most once a second). */
+    /**
+     * True when Flat Lighting is installed and its cardinal lighting is off (reads its config only).
+     * The file is stat'ed at most once a second and only re-parsed when it changed. Flat Lighting
+     * defaults cardinalLighting to true and only writes the file once the option is toggled, so a
+     * missing, unreadable or key-less file means "not flat".
+     */
     public static boolean isFlatLighting() {
         if (!FLAT_LIGHTING_LOADED) {
             return false;
@@ -36,10 +47,16 @@ public final class GreedyRuntimeState {
         long now = System.nanoTime();
         if (now - flatLightingCheckNanos > 1_000_000_000L) {
             flatLightingCheckNanos = now;
+            Path file = FabricLoader.getInstance().getConfigDir().resolve("flat-lighting.json");
             try {
-                flatLighting = java.nio.file.Files.readString(FabricLoader.getInstance().getConfigDir().resolve("flat-lighting.json"))
-                        .replace(" ", "").contains("\"cardinalLighting\":false");
+                long modified = Files.getLastModifiedTime(file).toMillis();
+                if (modified != flatLightingModified) {
+                    flatLightingModified = modified;
+                    JsonObject json = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+                    flatLighting = json.has("cardinalLighting") && !json.get("cardinalLighting").getAsBoolean();
+                }
             } catch (Exception e) {
+                flatLightingModified = Long.MIN_VALUE;
                 flatLighting = false;
             }
         }

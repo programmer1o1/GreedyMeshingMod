@@ -32,7 +32,6 @@ import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 //?}
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 //? if >=1.21.6 {
 /*import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
@@ -52,7 +51,6 @@ import net.minecraft.util.RandomSource;
 *///?} else {
 import net.minecraft.world.level.BlockAndTintGetter;
 //?}
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
@@ -63,9 +61,11 @@ import hi.sierra.greedy_meshing.GreedyEligibility;
 import hi.sierra.greedy_meshing.GreedyMesher;
 import hi.sierra.greedy_meshing.client.GreedyDebugStore;
 import hi.sierra.greedy_meshing.client.GreedyEmissiveSupport;
+import hi.sierra.greedy_meshing.client.GreedyFaceVisibility;
 import hi.sierra.greedy_meshing.client.GreedyLighting;
 import hi.sierra.greedy_meshing.client.GreedyPerformanceStats;
 import hi.sierra.greedy_meshing.client.GreedyRuntimeState;
+import hi.sierra.greedy_meshing.client.GreedySectionCache;
 import hi.sierra.greedy_meshing.client.GreedySpriteSupport;
 import hi.sierra.greedy_meshing.client.GreedyVanillaWorkState;
 import org.spongepowered.asm.mixin.Mixin;
@@ -102,8 +102,6 @@ public abstract class SectionCompilerMixin {
 
     @Unique
     private static final ThreadLocal<GreedyVanillaWorkState> GREEDY_MESHING$STATE = ThreadLocal.withInitial(GreedyVanillaWorkState::new);
-    @Unique
-    private static final Direction[] GREEDY_MESHING$FACES = Direction.values();
     @Inject(method = "compile", at = @At("HEAD"))
     private void greedyMeshing$beginCompile(
             SectionPos sectionPos,
@@ -246,12 +244,16 @@ public abstract class SectionCompilerMixin {
             int baseX = work.baseX();
             int baseY = work.baseY();
             int baseZ = work.baseZ();
+            long greedyBuildStartNanos = System.nanoTime();
             work.scratchLighting.applyDirectionalShade =
                     !GreedyRuntimeState.isInSableSubLevel(baseX >> 4, baseZ >> 4)
                     && !GreedyRuntimeState.isFlatLighting();
 
             long[][] mergeKeys = work.faceMergeKeys();
-            populateFaceVisibility(renderSectionRegion, work.sectionStates(), work.visibleFaces(), mergeKeys, baseX, baseY, baseZ, work.eligibleIndices(), work.eligibleCount());
+            GreedySectionCache sectionCache = GreedySectionCache.forThread();
+            sectionCache.begin(renderSectionRegion, baseX, baseY, baseZ);
+            work.scratchLighting.cache = sectionCache;
+            GreedyFaceVisibility.populate(renderSectionRegion, sectionCache, work.sectionStates(), work.visibleFaces(), mergeKeys, baseX, baseY, baseZ, work.eligibleIndices(), work.eligibleCount());
             List<GreedyMesher.GreedyQuad> merged = GreedyMesher.meshWithKeys(
                     work.sectionStates(), work.visibleFaces(), mergeKeys
             );
@@ -328,11 +330,13 @@ public abstract class SectionCompilerMixin {
             }
 
             GreedyPerformanceStats.onGreedySectionBuilt(work.eligibleCount(), merged.size(), emittedQuads, vanillaEquivalent);
+            GreedyPerformanceStats.recordBuildNanos(System.nanoTime() - greedyBuildStartNanos);
             GreedyPerformanceStats.setSectionGeometry(sectionPos.asLong(), emittedQuads, vanillaEquivalent);
             if (captureDebug) {
                 GreedyDebugStore.setSectionQuads(sectionPos.asLong(), debugQuads);
             }
         } finally {
+            GreedySectionCache.forThread().end();
             GREEDY_MESHING$STATE.remove();
         }
     }
@@ -453,185 +457,6 @@ public abstract class SectionCompilerMixin {
         TextureAtlasSprite sprite = handler.getFluidSprites(null, null, state.getFluidState())[0];
         return List.of(new FaceAppearance(sprite, true, -1));
         //?}
-    }
-
-    @Unique
-    private static void populateFaceVisibility(
-            //? if >=1.21.6 {
-            /*RenderSectionRegion region,
-            *///?} else {
-            RenderChunkRegion region,
-            //?}
-            BlockState[] sectionStates,
-            BitSet[] visibleFaces,
-            long[][] faceMergeKeys,
-            int baseX,
-            int baseY,
-            int baseZ,
-            int[] eligibleIndices,
-            int eligibleCount
-    ) {
-        GreedyMesher.clearFaceMaskArray(visibleFaces);
-        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
-        for (int i = 0; i < eligibleCount; i++) {
-            int idx = eligibleIndices[i];
-            BlockState state = sectionStates[idx];
-            if (state == null) {
-                continue;
-            }
-
-            int x = idx & 15;
-            int y = (idx >> 8) & 15;
-            int z = (idx >> 4) & 15;
-            int worldX = baseX + x;
-            int worldY = baseY + y;
-            int worldZ = baseZ + z;
-            for (Direction face : GREEDY_MESHING$FACES) {
-                int nx = x + face.getStepX();
-                int ny = y + face.getStepY();
-                int nz = z + face.getStepZ();
-                if (nx >= 0 && nx < GreedyMesher.SECTION_SIZE
-                        && ny >= 0 && ny < GreedyMesher.SECTION_SIZE
-                        && nz >= 0 && nz < GreedyMesher.SECTION_SIZE
-                        && sectionStates[GreedyMesher.index(nx, ny, nz)] != null) {
-                    continue;
-                }
-
-                samplePos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
-                BlockState neighbor = region.getBlockState(samplePos);
-                //? if >=1.21.2 {
-                if (Block.shouldRenderFace(state, neighbor, face)) {
-                //?} else {
-                /*if (Block.shouldRenderFace(state, region, new BlockPos(worldX, worldY, worldZ), face, samplePos)) {
-                *///?}
-                    visibleFaces[face.ordinal()].set(idx);
-                    int mergeKey;
-                    if (state.is(Blocks.WATER)) {
-                        // Water only merges within the interior of a flat, uncovered still-water body
-                        // (see GreedyEligibility.isGreedyWaterSource + isFlatWaterSurface) — vanilla
-                        // renders a sloped, per-corner-averaged surface everywhere else, which this
-                        // mod's flat GreedyQuad rectangles can't represent. The bottom face is always
-                        // an exact flat square regardless of the top surface's slope, so it skips the
-                        // check; every other face (including the sides, whose top edge follows the
-                        // same slope as the top face) needs it. Non-flat faces get a unique key so they
-                        // fall back to individual 1x1 quads — pixel-identical to un-merged vanilla
-                        // rendering, never a regression.
-                        boolean flat = face == Direction.DOWN
-                                || isFlatWaterSurface(region, worldX, worldY, worldZ, samplePos);
-                        mergeKey = flat ? 0 : (0x40000000 | idx);
-                    } else {
-                        // Aggressive ("absolute") greedy ignores the AO signature so same-block faces
-                        // merge into the largest possible quads; lighting is still sampled per sub-quad.
-                        mergeKey = GreedyConfig.aggressiveGreedy()
-                                ? 0
-                                : computeAoKey(region, samplePos, worldX, worldY, worldZ, face);
-                    }
-                    faceMergeKeys[face.ordinal()][idx] = mergeKey;
-                }
-            }
-        }
-    }
-
-    /**
-     * True iff the 3x3 horizontal neighbourhood centered on (worldX, worldY, worldZ) is entirely
-     * uncovered still-water source blocks — the union of the four lattice corners vanilla's own
-     * per-corner height averaging touches for this block's top face. Checking the superset rather
-     * than each corner's exact 2x2 footprint is conservative: a handful of tiles that would actually
-     * render flat get misclassified as non-flat (and simply don't merge), which is acceptable —
-     * this check only ever removes merge opportunities, never approves an incorrect one.
-     */
-    @Unique
-    private static boolean isFlatWaterSurface(
-            //? if >=1.21.6 {
-            /*RenderSectionRegion region,
-            *///?} else {
-            RenderChunkRegion region,
-            //?}
-            int worldX, int worldY, int worldZ, BlockPos.MutableBlockPos scratch
-    ) {
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                scratch.set(worldX + dx, worldY, worldZ + dz);
-                BlockState neighborState = region.getBlockState(scratch);
-                if (!neighborState.is(Blocks.WATER)) {
-                    return false;
-                }
-                FluidState neighborFluid = neighborState.getFluidState();
-                if (!neighborFluid.isSource() || neighborFluid.getType() != Fluids.WATER) {
-                    return false;
-                }
-                scratch.set(worldX + dx, worldY + 1, worldZ + dz);
-                if (region.getBlockState(scratch).getFluidState().getType() == Fluids.WATER) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    @Unique
-    private static final int[][][] AO_OFFSETS = new int[6][8][3];
-    static {
-        Direction[] faces = Direction.values();
-        for (Direction face : faces) {
-            int ax1, ay1, az1, ax2, ay2, az2;
-            switch (face) {
-                case DOWN, UP     -> { ax1=1; ay1=0; az1=0; ax2=0; ay2=0; az2=1; }
-                case NORTH, SOUTH -> { ax1=1; ay1=0; az1=0; ax2=0; ay2=1; az2=0; }
-                default           -> { ax1=0; ay1=0; az1=1; ax2=0; ay2=1; az2=0; }
-            }
-            int idx = 0;
-            for (int a = -1; a <= 1; a++) {
-                for (int b = -1; b <= 1; b++) {
-                    if (a == 0 && b == 0) continue;
-                    AO_OFFSETS[face.ordinal()][idx][0] = face.getStepX() + a * ax1 + b * ax2;
-                    AO_OFFSETS[face.ordinal()][idx][1] = face.getStepY() + a * ay1 + b * ay2;
-                    AO_OFFSETS[face.ordinal()][idx][2] = face.getStepZ() + a * az1 + b * az2;
-                    idx++;
-                }
-            }
-        }
-    }
-
-    @Unique
-    //? if >=1.21.6 {
-    /*private static int computeAoKey(RenderSectionRegion region, BlockPos.MutableBlockPos pos,
-    *///?} else {
-    private static int computeAoKey(RenderChunkRegion region, BlockPos.MutableBlockPos pos,
-    //?}
-                                     int worldX, int worldY, int worldZ, Direction face) {
-        int[][] offsets = AO_OFFSETS[face.ordinal()];
-        int key = 0;
-        for (int i = 0; i < 8; i++) {
-            pos.set(worldX + offsets[i][0], worldY + offsets[i][1], worldZ + offsets[i][2]);
-            BlockState neighbor = region.getBlockState(pos);
-            //? if >=26.3 {
-            /*// 26.3 narrowed isViewBlocking to the camera near-plane check; vanilla and Sodium AO
-            // now test isLightPermeable(), which is the same solid-and-dampening predicate.
-            if (!neighbor.isLightPermeable()) {
-            *///?} else {
-            if (neighbor.isViewBlocking(region, pos)
-                    //? if UNOBFUSCATED {
-                    /*&& neighbor.getLightDampening() != 0
-                    *///?} else if >=1.21.2 {
-                    && neighbor.getLightBlock() != 0
-                    //?} else {
-                    /*&& neighbor.getLightBlock(region, pos) != 0
-                    *///?}
-            ) {
-            //?}
-                key |= (1 << i);
-            }
-        }
-        // AO occupancy alone is insufficient: two otherwise identical faces can sit on
-        // opposite sides of a block/sky-light boundary. Keep the four-bit block and sky
-        // levels in disjoint key bits so a dark sample cannot be interpolated across a
-        // brighter merged run. Aggressive mode deliberately bypasses this whole key.
-        pos.set(worldX + face.getStepX(), worldY + face.getStepY(), worldZ + face.getStepZ());
-        int packedLight = GreedyLighting.mergeLightKey(region, pos);
-        key |= ((packedLight >>> 4) & 0xF) << 8;
-        key |= ((packedLight >>> 20) & 0xF) << 12;
-        return key;
     }
 
     /** Max sub-quad size for lighting subdivision. Larger merged quads are split into

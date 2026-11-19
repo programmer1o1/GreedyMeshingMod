@@ -1,6 +1,13 @@
 package hi.sierra.greedy_meshing.client;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
+//? if UNOBFUSCATED {
+/*import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+*///?} else {
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+//?}
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 //? if >=1.21.9 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -63,6 +70,27 @@ public final class GreedyMeshingClient implements ClientModInitializer {
         //?}
         ClientTickEvents.END_CLIENT_TICK.register(GreedyMeshingClient::onClientTick);
         GreedyResourceReloadListener.register();
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                //? if UNOBFUSCATED {
+                /*dispatcher.register(ClientCommands.literal("greedybench")
+                        .executes(context -> {
+                            GreedyBench.start(Minecraft.getInstance(), 1);
+                            return 1;
+                        })
+                        .then(ClientCommands.argument("rounds", IntegerArgumentType.integer(1, 50))
+                *///?} else {
+                dispatcher.register(ClientCommandManager.literal("greedybench")
+                        .executes(context -> {
+                            GreedyBench.start(Minecraft.getInstance(), 1);
+                            return 1;
+                        })
+                        .then(ClientCommandManager.argument("rounds", IntegerArgumentType.integer(1, 50))
+                //?}
+                                .executes(context -> {
+                                    GreedyBench.start(Minecraft.getInstance(),
+                                            IntegerArgumentType.getInteger(context, "rounds"));
+                                    return 1;
+                                }))));
     }
 
     private static void onClientTick(Minecraft mc) {
@@ -79,6 +107,7 @@ public final class GreedyMeshingClient implements ClientModInitializer {
             zonePlayerSectionX = Integer.MIN_VALUE;
         }
 
+        GreedyBench.tick(mc);
         greedyMeshing$refreshMergeZone(mc);
         greedyMeshing$pruneUnloadedSections(mc);
     }

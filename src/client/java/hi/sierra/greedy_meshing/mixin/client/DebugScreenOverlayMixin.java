@@ -61,6 +61,7 @@ public abstract class DebugScreenOverlayMixin {
                 lines.add(String.format("Sections: %d  Blocks: %s",
                         stats.greedySections(), fmt(stats.eligibleBlocks())));
                 lines.add(GreedyPerformanceStats.formatVertexSavings(stats));
+                lines.add(GreedyPerformanceStats.formatBuildTime());
                 if (GreedyRuntimeState.isShaderPackActive()) {
                     lines.add("Shader: tiled mode (face culling only)");
                 }
@@ -127,6 +128,7 @@ public abstract class DebugScreenOverlayMixin {
                 lines.add(String.format("Sections: %d  Blocks: %s",
                         stats.greedySections(), fmt(stats.eligibleBlocks())));
                 lines.add(GreedyPerformanceStats.formatVertexSavings(stats));
+                lines.add(GreedyPerformanceStats.formatBuildTime());
                 if (GreedyRuntimeState.isShaderPackActive()) {
                     lines.add("Shader: tiled mode (face culling only)");
                 }
@@ -195,6 +197,7 @@ public abstract class DebugScreenOverlayMixin {
         lines.add(String.format("Sections: %d  Blocks: %s",
                 stats.greedySections(), greedyMeshing$fmt(stats.eligibleBlocks())));
         lines.add(GreedyPerformanceStats.formatVertexSavings(stats));
+        lines.add(GreedyPerformanceStats.formatBuildTime());
 
         if (GreedyRuntimeState.isShaderPackActive()) {
             lines.add("Shader: tiled mode (face culling only)");
@@ -246,6 +249,7 @@ public abstract class DebugScreenOverlayMixin {
         lines.add(String.format("Sections: %d  Blocks: %s",
                 stats.greedySections(), greedyMeshing$fmt(stats.eligibleBlocks())));
         lines.add(GreedyPerformanceStats.formatVertexSavings(stats));
+        lines.add(GreedyPerformanceStats.formatBuildTime());
 
         if (GreedyRuntimeState.isShaderPackActive()) {
             lines.add("Shader: tiled mode (face culling only)");
