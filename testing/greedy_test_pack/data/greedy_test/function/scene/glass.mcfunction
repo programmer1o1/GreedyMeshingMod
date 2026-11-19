@@ -1,0 +1,13 @@
+fill ~2 ~0 ~2 ~29 ~7 ~2 minecraft:glass
+fill ~2 ~0 ~6 ~29 ~7 ~6 minecraft:tinted_glass
+fill ~2 ~0 ~10 ~4 ~7 ~10 minecraft:white_stained_glass
+fill ~5 ~0 ~10 ~7 ~7 ~10 minecraft:red_stained_glass
+fill ~8 ~0 ~10 ~10 ~7 ~10 minecraft:orange_stained_glass
+fill ~11 ~0 ~10 ~13 ~7 ~10 minecraft:yellow_stained_glass
+fill ~14 ~0 ~10 ~16 ~7 ~10 minecraft:lime_stained_glass
+fill ~17 ~0 ~10 ~19 ~7 ~10 minecraft:cyan_stained_glass
+fill ~20 ~0 ~10 ~22 ~7 ~10 minecraft:blue_stained_glass
+fill ~23 ~0 ~10 ~25 ~7 ~10 minecraft:purple_stained_glass
+fill ~2 ~0 ~14 ~29 ~7 ~14 minecraft:sea_lantern
+fill ~2 ~0 ~18 ~29 ~3 ~24 minecraft:oak_leaves[persistent=true]
+fill ~2 ~0 ~27 ~29 ~3 ~29 minecraft:ice
