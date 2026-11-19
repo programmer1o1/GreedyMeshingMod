@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.3]
+
+### Added
+- `/greedybench [rounds]` client command: rebuilds every loaded section and prints the per-section
+  greedy build time for each round, then the median and spread. The debug HUD also shows the
+  average and worst build time. F3+L's compile-queue metric does not see Sodium's chunk builder,
+  so this is the way to compare builds.
+
+### Changed
+- Vanilla and VulkanMod chunk building now read block state, light and AO occlusion through the
+  same neighbour cache Sodium already used, instead of querying the world for every AO corner.
+  About 8-10% faster per section on vanilla rendering in testing; Sodium is unchanged.
+- Face visibility and merge-key code that was duplicated across the Sodium, vanilla and VulkanMod
+  paths now lives in one place.
+
+### Fixed
+- Flat Lighting compatibility: its config is now parsed as JSON and only re-read when the file
+  changes, instead of being matched as raw text.
+
 ## [0.6.2]
 
 ### Added
